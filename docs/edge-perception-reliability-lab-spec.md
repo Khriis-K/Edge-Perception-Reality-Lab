@@ -6,11 +6,11 @@ Computer-vision demos often show a pretrained model working under favorable cond
 
 Synthetic degradations alone leave an open question: does a simulated condition affect a model the way the real condition does? Answering that requires labeled imagery captured in real adverse weather.
 
-The user needs a polished, visual project, achievable in roughly two weekends, that demonstrates those skills without requiring custom model training, specialized hardware, cloud deployment, or redistribution of third-party data. The result should be understandable in a short recorded demo and credible to engineers working on autonomous, aerospace, or other safety-conscious systems.
+The user needs a polished, visual project, achievable in roughly three weekends, that demonstrates those skills without requiring custom model training, specialized hardware, cloud deployment, or redistribution of third-party data. The result should be understandable in a short recorded demo and credible to engineers working on autonomous, aerospace, or other safety-conscious systems.
 
 ## Solution
 
-Build a locally runnable web application with two complementary evaluation modes that share one detector, one dashboard, and one reporting pipeline.
+Build a locally runnable web application with two complementary evaluation modes that share one detector, one dashboard, and one reporting pipeline. A Python service runs all data processing and inference behind a small local API, and a custom React frontend presents the results, giving full control over layout, overlays, and visualization.
 
 **Real-Weather Benchmark mode** evaluates a pretrained object detector against human-labeled ground truth from the public SeeingThroughFog dataset (Bijelic et al., CVPR 2020). The dataset contains real-world driving scenes in clear weather, fog, snow, and rain, plus fog-chamber recordings, with 2D and 3D bounding-box annotations and per-sample metadata on weather and illumination. The application reports accuracy metrics broken down by weather condition and object class.
 
@@ -107,13 +107,36 @@ Each experiment preserves its configuration and results so the user can compare 
 57. As a privacy-conscious user, I want processing to remain local, so that uploaded media and dataset imagery are not sent to an external service.
 58. As a user without a GPU, I want a CPU-compatible configuration, so that the demo remains accessible.
 59. As a user with accelerated hardware, I want the runtime to use an available supported execution provider, so that inference can run faster without changing behavior.
+60. As a developer, I want the frontend and backend to communicate through a documented, typed local API, so that either side can change without breaking the other.
+61. As a user, I want long-running experiments to report progress and remain cancellable from the browser, so that the interface never appears frozen.
+62. As a portfolio reviewer, I want to run the finished app without installing a JavaScript toolchain, so that setup stays limited to Python.
+
+### Workbench interaction
+
+63. As a user, I want a consistent workbench layout on every screen, so that I always know where navigation, details, and job status live.
+64. As a user, I want to keep several frames and views open in tabs, so that I can compare them without losing my place.
+65. As a user, I want an inspector that explains whatever I select, so that I can drill into a detection or run without leaving the view.
+66. As a user, I want a command palette, so that I can jump to any frame, run, or finding and start actions without hunting through menus.
+67. As a user, I want keyboard shortcuts for frame navigation and overlay toggles, so that reviewing hundreds of frames is fast.
+68. As a portfolio reviewer, I want the findings presented as a few headline statements backed by charts, so that I can understand the results in under a minute.
+69. As a developer reviewing the project, I want to see the API request a run will send, so that the frontend–backend boundary is visible and inspectable.
 
 ## Implementation Decisions
 
 ### Architecture and runtime
 
 - The product will be a local web application optimized for a single-user demonstration. It will not require accounts, authentication, a remote database, or a hosted backend.
-- The initial interface will be built with Streamlit. A separate frontend and API are intentionally deferred.
+- The system will have two parts: a Python backend service and a browser frontend. They will run on the same machine and communicate only through a local HTTP API.
+- The backend will use FastAPI. Request and response models will be defined with Pydantic so the API has a generated OpenAPI schema, and frontend TypeScript types will be generated from that schema rather than written by hand.
+- The frontend will be a single-page application built with React, TypeScript, and Vite. It will own layout, interaction state, and visualization only. It will perform no inference, matching, or metric calculation.
+- The frontend will use Blueprint, Palantir's open-source React UI toolkit, for controls, tables, trees, tabs, and dark-theme styling. Blueprint supplies components and color tokens; the layout and visual design are original to this project (see Visual design).
+- Bounding-box overlays will be drawn in an SVG or canvas layer positioned over the frame image, using the normalized coordinates returned by the API, so overlays stay aligned at any display size and can be toggled or filtered without new server requests.
+- Charts (timeline, heatmap, precision-recall curves, distributions, sim-to-real bars) will be built with D3 or visx. Chart inputs will be structured data from the API, not pre-rendered images.
+- Experiments will run as background jobs on the backend. Starting a run returns a job identifier. The frontend reads progress through server-sent events, falling back to polling. A cancel endpoint stops the job cleanly, and a partially completed job is never written to the cache as complete.
+- The API will expose resources for dataset status, subsets and manifests, sample and uploaded videos, experiments and jobs, per-frame results, frame images from the local cache, aggregate metrics, and report export. Endpoint names and payloads will be documented in the generated schema.
+- Frame images will be served from the local cache by experiment and frame identifier. The API will never accept arbitrary file paths from the browser, and served paths will be restricted to the configured dataset folder and cache directory.
+- For normal use, FastAPI will serve the built frontend as static files, so a single command starts the whole application on one local port. A separate Vite dev server with hot reload will be used only during frontend development.
+- Release builds will include the prebuilt frontend bundle, so reviewers need only Python to run the project. Node.js is required only to modify the frontend.
 - Python will own dataset loading, video decoding, degradations, inference, matching, metrics, caching, visualization data, and report creation.
 - OpenCV will decode video, read dataset images, apply visual degradations, and render preview artifacts.
 - A small pretrained YOLO-family object detector will provide inference. Pretrained weights will be used as-is; custom training and fine-tuning are not required.
@@ -168,10 +191,67 @@ Each experiment preserves its configuration and results so the user can compare 
 - In Synthetic mode, the score will combine dropped detections, newly introduced detections, class changes, and aggregate confidence loss using documented weights.
 - The dashboard and report will expose each contributing value, not only the combined score.
 
-### Views
+### Interface layout: the workbench
 
-- The main view will show the current frame with overlays. In Benchmark mode, predictions and ground truth are drawn together. In Synthetic mode, clean and degraded frames are shown side by side and kept synchronized.
-- The analysis view will contain a condition-by-class results table, precision-recall curves, the sim-to-real comparison, confidence distributions, a latency summary, and a worst-frame gallery. Video experiments will additionally show a frame-by-frame reliability timeline. Dataset subsets are not continuous sequences, so they will not show a timeline.
+- The application will use a single workbench layout on every screen, modeled on analyst tools rather than a dashboard of cards. From left to right it has:
+  - a top bar with breadcrumbs, command search, a local-server status indicator, and an Export report action;
+  - a narrow icon rail for navigation;
+  - an explorer panel on the left;
+  - a central work area with tabs;
+  - an inspector panel on the right.
+
+  A bottom dock appears on screens that stream or tabulate data.
+- The rail contains five sections: Setup, Benchmark, Synthetic, Findings, and Report. The active section is marked with a visible indicator, not by color alone.
+- The explorer adapts to the section:
+  - Setup lists runs and a New run entry.
+  - Benchmark shows a tree of conditions, each with its mAP, expanding to frames sorted by error score.
+  - Synthetic lists synthetic runs grouped by input.
+  - Findings shows an outline of the findings and a condition list.
+  - Report lists previous exports.
+- The inspector shows details for whatever is selected: a detection, a frame, a run, or an export. It never holds primary content that is unavailable elsewhere.
+- The work area supports multiple tabs, so a user can keep several frames or views open and switch between them without losing state.
+
+### Screens
+
+- **Setup.** A New run form with the mode choice, dataset folder and checks, and the subset table. The inspector shows a live preview of the exact API request the run will send, plus the class mapping. Starting a run returns immediately and hands off to the job stream.
+- **Benchmark.** A frame viewer with ground-truth and prediction overlays, each marked as a hit, miss, false alarm, class confusion, or ignored region. A toolbar toggles labels, predictions, and ignore regions and sets the display threshold. The bottom dock has two tabs:
+  - a Job tab showing streamed progress events, per-condition completion, latency, and warnings, with a Cancel control;
+  - a Frame table tab.
+
+  The inspector shows the selected detection (IoU, normalized box, error weight), the frame's error counts, and per-class AP for this condition compared with clear weather.
+- **Synthetic.** Clean and degraded frames side by side, always synchronized, with a per-frame instability strip and a scrubber. The dock shows the current frame's match table. The inspector holds the degradation choice, severity, derived parameters, seed, stability metrics, and latency.
+- **Findings.** A findings-first document rather than a grid of charts. It is organized as numbered findings, each led by a one-sentence plain-language headline, followed by the evidence:
+  - Finding 01, sim-to-real: headline numbers and paired per-class drop bars.
+  - Finding 02, where the detector fails: the condition-by-class AP heatmap.
+  - Finding 03: precision-recall curves.
+  - The worst-frame gallery.
+
+  Headlines are written by the user from the results, not generated automatically. The inspector shows the run record, latency, and a "read this first" limitations summary. Video experiments additionally show a frame-by-frame reliability timeline. Dataset subsets are not continuous sequences, so they do not.
+- **Report.** A live preview of the exported HTML report in the work area, with tabs for the JSON and CSV outputs. The inspector holds file choices, the dataset-imagery toggle (off by default, with a warning when enabled), the list of always-included sections, and the export action.
+
+### Command palette and keyboard
+
+- A command palette opens with Cmd/Ctrl+K from anywhere. It searches frames, runs, and conditions, and runs actions such as starting a synthetic condition, opening a finding, comparing a frame, or exporting a report. Each result shows whether it will use cached results or start a new job.
+- Core navigation will be available from the keyboard:
+  - arrow keys move between frames;
+  - L and P toggle labels and predictions;
+  - short "g" sequences jump between sections.
+
+  Shortcuts will be listed in the palette and shown as hints under the frame viewer.
+- Shortcuts will be ignored while focus is in a text input, and every shortcut action will also be reachable by mouse.
+
+### Visual design
+
+- The interface will use a dark, low-chrome visual style inspired by Palantir's aesthetic:
+  - a pure-black top bar and rail over slate-gray panels;
+  - white for primary actions, selection, and the active section;
+  - tight corner radii;
+  - dense, small type.
+- Colors will come from Blueprint's open-source palette. Blue marks clean results and hits; orange marks degraded results and errors. The two colors also differ in lightness, and every overlay carries a text label, so meaning never depends on color alone.
+- The exported report will use a light layout: a black header band, white page, and the same numbered-findings structure, so it prints and shares cleanly.
+- No Palantir logos, product names, or proprietary screen designs will be used. The design takes inspiration from the palette and density, not from any specific product.
+- Text will meet WCAG AA contrast. All controls will be real buttons, links, or labeled inputs, and icon-only rail buttons will carry accessible names.
+- The workbench targets desktop widths of 1280 px and above. Below that, the inspector collapses into a drawer rather than squeezing the frame viewer.
 
 ### Caching, timing, and reports
 
@@ -186,6 +266,8 @@ Each experiment preserves its configuration and results so the user can compare 
 ### Privacy and messaging
 
 - User-provided media and dataset imagery will remain on the local machine. No telemetry or cloud inference will be introduced.
+- The backend will bind to 127.0.0.1 only. Cross-origin requests will be disabled in normal use and allowed only from the local Vite dev server during development.
+- The frontend will load no third-party scripts, fonts, or analytics at runtime; all assets will be bundled locally.
 - Error messages will be presented in plain language, with detailed diagnostics available for development.
 - The application will explicitly state that it is an educational robustness evaluation and has not been validated for safety-critical or operational use.
 - The README will lead with an animated demonstration, a one-paragraph problem statement, the headline sim-to-real finding, setup instructions for both modes, an architecture diagram, metric definitions, the class mapping, limitations, and ethical-use boundaries. It will cite the SeeingThroughFog paper.
@@ -196,7 +278,11 @@ Each experiment preserves its configuration and results so the user can compare 
 - A deterministic model-runner substitute will be used in acceptance tests. It will return fixed detections for known fixture frames, so the workflow can be exercised without downloading model weights, requiring a GPU, or depending on nondeterministic inference.
 - The real dataset will never be required by the test suite. A tiny synthetic fixture will mimic the dataset's folder layout, KITTI label format, and metadata structure. It will include each evaluation condition, each mapped class, a fallback-labeled object, and a malformed label line. The fixture will be generated rather than copied from the real dataset.
 - One small synthetic video will serve as the canonical video fixture.
-- Acceptance tests will verify externally observable behavior rather than Streamlit internals or private helper functions.
+- Acceptance tests will be written with Playwright and drive a real browser against the built frontend served by the backend, exactly as a reviewer would run it.
+- Acceptance tests will verify externally observable behavior rather than React component internals or private helper functions.
+- The API will have contract tests that exercise each endpoint through its HTTP interface, covering valid requests, validation errors, job progress and cancellation, and rejection of paths outside the dataset and cache folders.
+- A check will fail the build if the generated TypeScript types are out of date with the backend schema.
+- Frontend unit tests will be limited to logic worth isolating, such as overlay coordinate transforms and threshold filtering. Visual components will be covered by the acceptance suite rather than snapshot tests.
 - The dataset adapter will have focused tests covering label parsing, condition assignment, day/night splitting, exclusion of undeterminable samples, missing-folder errors, and deterministic subset selection from a seed.
 - The class mapping will have table-driven tests covering every mapped class, unmapped classes, and fallback-class ignore regions.
 - The ground-truth matching and metric layer will use table-driven examples covering hits, misses, false alarms, class confusions, ignore regions, empty frames, overlapping boxes, and a small hand-computed average-precision case.
@@ -206,7 +292,9 @@ Each experiment preserves its configuration and results so the user can compare 
 - Persistence tests will verify that identical inputs reuse cached results and that a change in any result-affecting configuration, including the manifest or class mapping, creates a distinct identifier.
 - Report tests will verify that exported reports contain configuration, manifest, class mapping, metric definitions with sample sizes, and limitations, and that they contain no dataset imagery by default.
 - Performance checks will use generous local thresholds and will detect accidental regressions rather than claim hardware-independent real-time performance.
-- Manual verification will be performed once against the real dataset subset, confirming label alignment on a handful of frames, sensible per-condition counts, and legible overlays at narrow and wide browser widths.
+- Manual verification will be performed once against the real dataset subset. It will confirm label alignment on a handful of frames, sensible per-condition counts, and legible overlays at 1280 px and wider, and it will check the collapsed-inspector layout below 1280 px.
+- The acceptance suite will cover the command palette (open, search, run an action), the keyboard shortcuts (frame navigation, overlay toggles, and no firing while typing in inputs), tab switching without state loss, and the inspector updating on selection.
+- An automated accessibility check (for example, axe run through Playwright) will run on each screen and fail the build on contrast violations or unlabeled controls.
 
 ## Out of Scope
 
@@ -220,6 +308,7 @@ Each experiment preserves its configuration and results so the user can compare 
 - Live surveillance feeds, drone control, vehicle control, or integration with physical sensors.
 - Adversarial-example generation intended to evade perception systems.
 - Cloud hosting, cloud inference, user accounts, team collaboration, or remote persistence.
+- A publicly deployed frontend, server-side rendering, or an API reachable from other machines.
 - A production-grade security model or processing of classified, controlled, export-restricted, or otherwise sensitive data.
 - Mobile application support.
 - Supporting every video codec or arbitrarily long videos.
@@ -233,8 +322,9 @@ Each experiment preserves its configuration and results so the user can compare 
 - A compelling demo sequence is: open the Benchmark view and show average precision dropping from clear to fog to snow; open a real-fog worst frame showing a missed vehicle; switch to Synthetic mode on clear-weather frames and raise fog severity; show the sim-to-real chart comparing the two drops; export the report.
 - The sim-to-real comparison has real confounds. Real fog co-occurs with lower light, different roads, and different traffic, and fog-chamber scenes differ from open-road scenes. The limitations section must say this plainly. A mismatch between synthetic and real results is a legitimate and interesting finding, not a failure of the project.
 - Dataset downloads require registration, and the maintainers note that the download service has periodic downtime. Synthetic mode on the bundled sample video must remain fully functional without the dataset, so the project is never blocked on data access.
-- Build order: ship Synthetic mode on the bundled video first (the original weekend scope), then add the dataset adapter and class mapping, then Benchmark mode, then the sim-to-real view.
-- If time becomes constrained, preserve Synthetic mode end to end, per-condition average precision in Benchmark mode, the class mapping and ignore-region documentation, latency measurement, the worst-frame gallery, and the limitations statement. Defer the precision-recall curves, day/night splitting, and additional styling before removing those elements.
+- Build order: first build the Python pipeline and FastAPI endpoints for Synthetic mode on the bundled video, verified through API tests. Then build the React shell with the comparison view. Then add the dataset adapter and class mapping, Benchmark mode, and finally the sim-to-real view. Keeping the pipeline behind the API from the start means no frontend work is ever blocked on, or tangled with, ML code.
+- If time becomes constrained, cut polish in this order: multi-tab work area (fall back to one view per section), command palette actions (keep palette navigation only), keyboard sequences beyond the arrows, L, and P, and the Setup request preview. Preserve the workbench shell, frame viewer, job dock, and Findings layout.
+- Also preserve Synthetic mode end to end, per-condition average precision in Benchmark mode, the class mapping and ignore-region documentation, latency measurement, the worst-frame gallery, and the limitations statement. Defer the precision-recall curves, day/night splitting, server-sent events (polling is sufficient), and additional styling before removing those elements.
 - Success means a reviewer can clone the project, run the synthetic demo with one documented command on CPU, optionally connect a local copy of the dataset and reproduce the benchmark from the committed manifest, understand the system within two minutes, and see both useful model behavior and honest failures.
 - Reference: Bijelic et al., "Seeing Through Fog Without Seeing Fog: Deep Multimodal Sensor Fusion in Unseen Adverse Weather," CVPR 2020. Dataset code repository: https://github.com/princeton-computational-imaging/SeeingThroughFog
 - No issue tracker is configured in the current workspace, so this specification is saved locally and has not been published or labeled `ready-for-agent`.
