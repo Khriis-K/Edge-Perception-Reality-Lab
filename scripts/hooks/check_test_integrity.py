@@ -55,7 +55,7 @@ MOCK_PATTERNS = [
 
 WEAKENED_ASSERTION_PATTERNS = [
     r"assert True$",
-    r"assert 1",
+    r"assert 1\s*(#.*)?$",  # bare `assert 1`, but NOT assert 1 == x or assert 10 == x
     r"assert \"[^\"]*\"(\s*\))?\s*(#.*)?$",  # bare string assertion (always truthy), but NOT assert "x" in y
     r"self\.assertTrue\(True\)",
     r"assert result is not None  # relaxed",
