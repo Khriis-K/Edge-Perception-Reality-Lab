@@ -1,6 +1,6 @@
 # SeeingThroughFog: data inspection (2026-09-29)
 
-First look at the real download, done for #9 (fog-chamber fixture sample). Inspected locally, never committed:
+First look at the real download, prompted by the fog-chamber comment on #9. Inspected locally, never committed:
 `labeltool_labels.zip`, `labeltool_labels_refined.zip`, `gt_labels/cam_left_labels_TMP.zip`,
 `weather_station.zip`, `filtered_relevant_can_data.zip`. Camera images not yet downloaded.
 
