@@ -218,8 +218,8 @@ def check_for_mock_only_tests(diff: str) -> list[str]:
             continue
 
         if in_new_test:
-            # Check for assertions
-            if re.search(r"assert\w*\(", line):
+            # Check for assertions: a bare pytest `assert`, or assertEqual( / assert_called_with( etc.
+            if re.search(r"\bassert\b|\bassert\w*\(", line):
                 has_assertion = True
             # Check for mocks
             for pattern in MOCK_PATTERNS:

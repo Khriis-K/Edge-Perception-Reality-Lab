@@ -1,6 +1,13 @@
 # Python
 __pycache__/
 .venv/
+*.egg-info/
+
+# Frontend
+node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
 
 # Claude Code: share settings and project skills; keep personal config and hook markers local
 .claude/*

@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python scripts/hooks/block_test_writes.py"
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && python scripts/hooks/block_test_writes.py"
           }
         ]
       },
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python scripts/hooks/block_coauthor.py"
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && python scripts/hooks/block_coauthor.py"
           }
         ]
       }
@@ -26,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python scripts/hooks/run_associated_tests.py"
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && python scripts/hooks/run_associated_tests.py"
           }
         ]
       }
@@ -36,7 +36,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python scripts/hooks/enforce_code_review.py"
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && python scripts/hooks/enforce_code_review.py"
           }
         ]
       }

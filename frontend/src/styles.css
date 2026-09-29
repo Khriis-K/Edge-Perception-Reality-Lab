@@ -1,0 +1,293 @@
+/* Colors are Blueprint palette tokens (named alongside); pure black is the top bar and rail. */
+:root {
+  --chrome: #000000;
+  --black: #111418; /* Blueprint BLACK: work area */
+  --panel: #1c2127; /* DARK_GRAY1: explorer, inspector, tab strip */
+  --raised: #252a31; /* DARK_GRAY2: active rail item */
+  --border: #2f343c; /* DARK_GRAY3 */
+  --text: #f6f7f9; /* LIGHT_GRAY5 */
+  --muted: #abb3bf; /* GRAY4 */
+  --ok: #72ca9b; /* GREEN5 */
+  --warn: #fbb360; /* ORANGE5 */
+  --sans: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--black);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 13px;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+.workbench {
+  display: grid;
+  grid-template-columns: 52px 250px minmax(0, 1fr) 300px;
+  grid-template-rows: 44px minmax(0, 1fr);
+  grid-template-areas:
+    "top top top top"
+    "rail explorer work inspector";
+  height: 100%;
+}
+
+/* --- top bar -------------------------------------------------------------- */
+
+.top-bar {
+  grid-area: top;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 0 16px;
+  background: var(--chrome);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.breadcrumbs ol {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--mono);
+  color: var(--muted);
+}
+
+.breadcrumbs li + li::before {
+  content: "/";
+  padding: 0 8px;
+  color: var(--muted);
+}
+
+.breadcrumbs [aria-current="page"] {
+  color: var(--text);
+}
+
+.top-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.command-search {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  height: 30px;
+  padding: 0 6px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--raised);
+  color: var(--muted);
+  font: inherit;
+}
+
+.command-search kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--muted);
+  border-radius: 2px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.server-status {
+  height: 30px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.server-status[data-health="connected"] {
+  color: var(--ok);
+}
+
+.server-status[data-health="disconnected"] {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+
+.primary-action {
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 2px;
+  background: #ffffff;
+  color: var(--black);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primary-action:hover {
+  background: var(--text);
+}
+
+/* --- rail ------------------------------------------------------------------ */
+
+.rail {
+  grid-area: rail;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+  background: var(--chrome);
+  border-right: 1px solid var(--border);
+}
+
+.rail ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* .rail prefix outranks Blueprint's `.bp6-dark a` link color. */
+.rail .rail-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 3px;
+  color: var(--muted);
+}
+
+.rail .rail-link:hover {
+  color: var(--text);
+}
+
+/* Active section: raised tile plus a white bar, so it never relies on color alone. */
+.rail-link[aria-current="page"] {
+  background: var(--raised);
+  color: #ffffff;
+}
+
+.rail-link[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 1px;
+  background: #ffffff;
+}
+
+.rail-version {
+  margin-top: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* --- panels ---------------------------------------------------------------- */
+
+.panel {
+  background: var(--panel);
+  overflow: auto;
+}
+
+.explorer {
+  grid-area: explorer;
+  border-right: 1px solid var(--border);
+}
+
+.inspector {
+  grid-area: inspector;
+  border-left: 1px solid var(--border);
+}
+
+.panel-header {
+  padding: 12px 12px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.empty-state {
+  padding: 12px;
+  color: var(--muted);
+}
+
+/* --- work area ------------------------------------------------------------- */
+
+.work-area {
+  grid-area: work;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+}
+
+.tab-strip > .bp6-tab-list {
+  gap: 0;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.tab-strip .bp6-tab {
+  margin: 0;
+  padding: 0 16px;
+  line-height: 36px;
+  font-family: var(--mono);
+  color: var(--muted);
+}
+
+/* .workbench prefix outranks Blueprint's dark-theme tab colors, including on hover. */
+.workbench .tab-strip .bp6-tab[aria-selected="true"] {
+  background: var(--black);
+  color: var(--text);
+  box-shadow: inset 0 2px 0 #ffffff;
+}
+
+.tab-strip .bp6-tab-panel {
+  margin: 0;
+}
+
+.work-body {
+  padding: 20px 24px;
+}
+
+.work-body h1 {
+  margin-bottom: 6px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.work-body .empty-state {
+  padding: 0;
+}
