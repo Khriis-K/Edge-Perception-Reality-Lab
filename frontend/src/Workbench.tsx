@@ -2,6 +2,7 @@ import { Button, Drawer, Tab, Tabs } from "@blueprintjs/core";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Navigate, useParams } from "react-router";
 import { DatasetSetup } from "./DatasetSetup";
+import { DegradationInspector } from "./DegradationSettings";
 import { Rail } from "./Rail";
 import { SyntheticRun } from "./SyntheticRun";
 import { findSection, type Section } from "./sections";
@@ -23,7 +24,7 @@ export function Workbench() {
   }, [wide]);
   if (!section) return <Navigate to="/setup" replace />;
 
-  const inspector = <InspectorContent />;
+  const inspector = <InspectorContent section={section} />;
   return (
     <div className="workbench">
       <TopBar section={section} onOpenInspector={wide ? undefined : () => setInspectorOpen(true)} />
@@ -78,7 +79,8 @@ function Overview({ section }: { section: Section }) {
 }
 
 /** What the inspector shows; rendered once, inside either the panel or the drawer. */
-function InspectorContent() {
+function InspectorContent({ section }: { section: Section }) {
+  if (section.id === "synthetic") return <DegradationInspector />;
   return <p className="empty-state">Select something to see its details.</p>;
 }
 

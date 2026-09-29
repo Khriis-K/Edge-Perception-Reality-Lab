@@ -10,6 +10,7 @@
   --ok: #72ca9b; /* GREEN5 */
   --warn: #fbb360; /* ORANGE5 */
   --clean: #8abbff; /* BLUE5: clean results and predictions */
+  --degraded: #c87619; /* ORANGE3: degraded results; darker than --clean, so lightness differs too */
   --sans: "IBM Plex Sans", system-ui, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, monospace;
 }
@@ -399,7 +400,13 @@ p {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-width: 960px;
+  max-width: 1400px;
+}
+
+.frame-panes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .viewer-toolbar,
@@ -460,9 +467,92 @@ p {
   stroke-width: 3px;
 }
 
-.frame figcaption {
-  margin-top: 6px;
+/* Degraded boxes are also dashed: a second cue besides hue and lightness. */
+.frame.degraded .overlay rect {
+  stroke: var(--degraded);
+  stroke-dasharray: 6 3;
+}
+
+.frame.degraded .overlay text {
+  fill: var(--degraded);
+}
+
+.pane-title {
+  margin-bottom: 6px;
+  font-weight: 600;
+  border-left: 3px solid var(--clean);
+  padding-left: 6px;
+}
+
+.frame.degraded .pane-title {
+  border-left: 3px dashed var(--degraded);
+}
+
+.pane-frame {
+  font-weight: 400;
   color: var(--muted);
+}
+
+.pane-count,
+.viewer-note {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+
+/* --- degradation inspector ----------------------------------------------------- */
+
+.degradation-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 12px;
+}
+
+.inspector-heading {
+  margin: 0;
+  font-size: 13px;
+}
+
+.degradation-inspector .field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--muted);
+}
+
+.field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.field-row input {
+  flex: 1;
+}
+
+.field-value,
+.parameters {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.parameters {
+  margin: 0;
+}
+
+.parameters div {
+  display: flex;
+  justify-content: space-between;
+}
+
+.parameters dd {
+  margin: 0;
+}
+
+.field-note {
+  margin: 0;
+  font-size: 12px;
 }
 
 /* --- setup: dataset -------------------------------------------------------- */

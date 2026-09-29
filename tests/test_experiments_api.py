@@ -15,6 +15,9 @@ from backend.stub_runner import StubRunner
 from scripts.make_sample_video import FRAMES, HEIGHT, WIDTH
 
 SAMPLE = "synthetic-traffic"
+# Mild enough that the stub still finds the car in the degraded frames too.
+DEGRADATION = {"kind": "blur", "severity": 0.1, "seed": 0}
+RUN = {"sample_id": SAMPLE, "degradation": DEGRADATION}
 TERMINAL = {"completed", "cancelled", "failed"}
 
 
@@ -62,7 +65,7 @@ def client(tmp_path):
 
 
 def start(client):
-    response = client.post("/api/jobs", json={"sample_id": SAMPLE})
+    response = client.post("/api/jobs", json=RUN)
     assert response.status_code == 202, response.text
     return response.json()
 
@@ -119,7 +122,7 @@ def test_progress_is_reported_while_the_job_runs(tmp_path):
     running = wait_for(client, job["id"], lambda j: j["status"] == "running" and j["frames_total"] == FRAMES)
     assert running["progress"] == 0.0
 
-    runner.allow(12)
+    runner.allow(2 * 12)  # two detector calls per frame: clean and degraded
     partway = wait_for(client, job["id"], lambda j: j["frames_done"] == 12)
     assert partway["status"] == "running"
     assert partway["progress"] == 12 / FRAMES
@@ -142,10 +145,11 @@ def test_a_completed_run_has_normalized_detections_for_every_frame(client):
     assert (experiment["frame_width"], experiment["frame_height"]) == (WIDTH, HEIGHT)
     assert [f["index"] for f in experiment["frames"]] == list(range(FRAMES))
     for frame in experiment["frames"]:
-        labels = sorted(d["label"] for d in frame["detections"])
-        assert labels == ["car", "person"]
-        for detection in frame["detections"]:
-            assert all(0 <= detection["box"][k] <= 1 for k in ("x1", "y1", "x2", "y2"))
+        for variant in ("clean", "degraded"):
+            labels = sorted(d["label"] for d in frame[variant])
+            assert labels == ["car", "person"]
+            for detection in frame[variant]:
+                assert all(0 <= detection["box"][k] <= 1 for k in ("x1", "y1", "x2", "y2"))
 
 
 def test_results_keep_raw_detections_down_to_the_confidence_floor_and_no_lower(client):
@@ -153,7 +157,7 @@ def test_results_keep_raw_detections_down_to_the_confidence_floor_and_no_lower(c
 
     experiment = client.get(f"/api/experiments/{job['experiment_id']}").json()
 
-    confidences = [d["confidence"] for f in experiment["frames"] for d in f["detections"]]
+    confidences = [d["confidence"] for f in experiment["frames"] for d in f["clean"] + f["degraded"]]
     assert experiment["confidence_floor"] == CONFIDENCE_FLOOR
     assert min(confidences) == 0.3  # below the display default, above the floor: kept
     assert all(c >= CONFIDENCE_FLOOR for c in confidences)  # the stub's 0.02 detection is dropped
@@ -167,10 +171,11 @@ def test_a_completed_run_records_the_model_metadata(client):
     assert experiment["model"] == StubRunner().info.model_dump()
 
 
-def test_frame_images_are_served_as_jpeg_at_the_video_size(client):
+@pytest.mark.parametrize("variant", ["clean", "degraded"])
+def test_frame_images_are_served_as_jpeg_at_the_video_size(client, variant):
     job = run_to_completion(client)
 
-    response = client.get(f"/api/experiments/{job['experiment_id']}/frames/{FRAMES - 1}")
+    response = client.get(f"/api/experiments/{job['experiment_id']}/frames/{variant}/{FRAMES - 1}")
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/jpeg"
@@ -182,7 +187,7 @@ def test_a_frame_whose_cached_image_was_deleted_is_404_not_a_server_error(tmp_pa
     job = run_to_completion(client)
     shutil.rmtree(tmp_path / "cache")
 
-    response = client.get(f"/api/experiments/{job['experiment_id']}/frames/0")
+    response = client.get(f"/api/experiments/{job['experiment_id']}/frames/clean/0")
 
     assert response.status_code == 404
 
@@ -205,7 +210,7 @@ def test_cancel_mid_run_stops_the_job_and_never_records_it_as_complete(tmp_path)
     assert final["frames_done"] < FRAMES
     assert runner.calls < FRAMES  # it stopped, rather than finishing and discarding
     assert client.get(f"/api/experiments/{job['experiment_id']}").status_code == 404
-    assert client.get(f"/api/experiments/{job['experiment_id']}/frames/0").status_code == 404
+    assert client.get(f"/api/experiments/{job['experiment_id']}/frames/clean/0").status_code == 404
     assert not (tmp_path / "cache" / job["experiment_id"]).exists()
 
 
@@ -235,7 +240,7 @@ def test_a_failed_job_reports_the_error_and_is_never_recorded_as_complete(tmp_pa
 def test_starting_a_run_without_model_weights_explains_how_to_fetch_them(tmp_path):
     client = make_client(tmp_path, runner=None)
 
-    response = client.post("/api/jobs", json={"sample_id": SAMPLE})
+    response = client.post("/api/jobs", json=RUN)
 
     assert response.status_code == 503
     assert "scripts/fetch_model.py" in response.json()["detail"]
@@ -246,7 +251,12 @@ def test_starting_a_run_without_model_weights_explains_how_to_fetch_them(tmp_pat
 
 @pytest.mark.parametrize(
     "body",
-    [{"sample_id": "nope"}, {"sample_id": "../samples/synthetic_traffic.mp4"}, {}, {"path": "C:/video.mp4"}],
+    [
+        {**RUN, "sample_id": "nope"},
+        {**RUN, "sample_id": "../samples/synthetic_traffic.mp4"},
+        {"degradation": DEGRADATION},
+        {"path": "C:/video.mp4", "degradation": DEGRADATION},
+    ],
     ids=["unknown-sample", "path-as-id", "missing", "path-field"],
 )
 def test_starting_a_run_needs_a_known_sample_id(client, body):
@@ -270,13 +280,13 @@ def test_unknown_experiments_are_404(client):
 @pytest.mark.parametrize(
     "path, status",
     [
-        ("/api/experiments/unknown/frames/0", 404),
-        ("/api/experiments/..%2F..%2Fpyproject.toml/frames/0", 404),
-        ("/api/experiments/{exp}/frames/{frames}", 404),  # one past the last frame
-        ("/api/experiments/{exp}/frames/-1", 422),
-        ("/api/experiments/{exp}/frames/0.jpg", 422),
+        ("/api/experiments/unknown/frames/clean/0", 404),
+        ("/api/experiments/..%2F..%2Fpyproject.toml/frames/clean/0", 404),
+        ("/api/experiments/{exp}/frames/clean/{frames}", 404),  # one past the last frame
+        ("/api/experiments/{exp}/frames/clean/-1", 422),
+        ("/api/experiments/{exp}/frames/clean/0.jpg", 422),
         # Decoded slashes mean no route matches at all.
-        ("/api/experiments/{exp}/frames/..%2F..%2Fpyproject.toml", 404),
+        ("/api/experiments/{exp}/frames/clean/..%2F..%2Fpyproject.toml", 404),
     ],
     ids=["unknown-experiment", "path-as-experiment", "out-of-range", "negative", "file-name", "path-as-frame"],
 )
@@ -295,7 +305,7 @@ def test_frames_of_a_running_job_are_not_served(tmp_path):
     job = start(client)
     wait_for(client, job["id"], lambda j: j["status"] == "running")
 
-    assert client.get(f"/api/experiments/{job['experiment_id']}/frames/0").status_code == 404
+    assert client.get(f"/api/experiments/{job['experiment_id']}/frames/clean/0").status_code == 404
     runner.open()
 
 
@@ -311,6 +321,8 @@ def test_run_endpoints_are_in_the_openapi_schema(client):
         "/api/jobs/{job_id}",
         "/api/jobs/{job_id}/cancel",
         "/api/experiments/{experiment_id}",
-        "/api/experiments/{experiment_id}/frames/{frame_index}",
+        "/api/experiments/{experiment_id}/frames/{variant}/{frame_index}",
+        "/api/degradations",
+        "/api/degradations/{kind}/parameters",
     ]:
         assert path in schema["paths"]

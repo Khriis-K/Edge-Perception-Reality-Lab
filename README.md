@@ -87,7 +87,7 @@ npm --prefix frontend run gen:api
 
 ```
 .venv/Scripts/python.exe -m pytest                    # backend contract tests
-.venv/Scripts/python.exe -m pytest -m model           # the same runner contract against the real weights
+.venv/Scripts/python.exe -m pytest -m model           # runner contract and max-severity darkness/fog, on the real weights
 npm --prefix frontend exec -- playwright install chromium   # once
 npm --prefix frontend run check                       # API types are current, unit tests, then browser + axe tests
 ```

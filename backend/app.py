@@ -2,9 +2,11 @@
 
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 
 from backend.api import router
 from backend.detection import ModelRunner
@@ -33,6 +35,7 @@ def create_app(
     # Fixed for the app's lifetime: the browser never sends a filesystem path.
     app.state.dataset_root = dataset_root.resolve() if dataset_root else None
     app.include_router(router)
+    app.add_exception_handler(RequestValidationError, _validation_error)
 
     if dev:
         app.add_middleware(
@@ -44,6 +47,12 @@ def create_app(
 
     _serve_frontend(app, static_dir.resolve())
     return app
+
+
+async def _validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """FastAPI's 422, minus the echoed input: a rejected NaN can't be written back as JSON."""
+    errors = [{key: value for key, value in error.items() if key != "input"} for error in exc.errors()]
+    return JSONResponse(status_code=422, content={"detail": jsonable_encoder(errors)})
 
 
 def _serve_frontend(app: FastAPI, static_dir: Path) -> None:

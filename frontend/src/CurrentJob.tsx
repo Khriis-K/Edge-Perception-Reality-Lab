@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { cancelJob, fetchJob, JobNotFound, startRun, type Job } from "./api/client";
+import { cancelJob, fetchJob, JobNotFound, startRun, type DegradationSettings, type Job } from "./api/client";
 
 const POLL_MS = 250;
 
@@ -9,7 +9,7 @@ interface CurrentJob {
   job: Job | null;
   /** Why starting or polling failed, in plain language. */
   error: string | null;
-  start: (sampleId: string) => Promise<void>;
+  start: (sampleId: string, degradation: DegradationSettings) => Promise<void>;
   cancel: () => Promise<void>;
 }
 
@@ -53,10 +53,10 @@ export function CurrentJobProvider({ children }: { children: ReactNode }) {
     };
   }, [activeId]);
 
-  const start = useCallback(async (sampleId: string) => {
+  const start = useCallback(async (sampleId: string, degradation: DegradationSettings) => {
     setError(null);
     try {
-      setJob(await startRun(sampleId));
+      setJob(await startRun(sampleId, degradation));
     } catch (e) {
       setError((e as Error).message);
     }

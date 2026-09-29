@@ -4,6 +4,11 @@ export type HealthResponse = components["schemas"]["HealthResponse"];
 export type SampleVideo = components["schemas"]["SampleVideo"];
 export type Job = components["schemas"]["JobResponse"];
 export type Experiment = components["schemas"]["Experiment"];
+export type Degradation = components["schemas"]["Degradation"];
+export type DegradationSettings = components["schemas"]["DegradationSettings"];
+export type DegradationKind = DegradationSettings["kind"];
+// A path parameter, which the generated schema doesn't name as a type. Mirrors backend/jobs.py.
+export type FrameVariant = "clean" | "degraded";
 export type DatasetStatus = components["schemas"]["DatasetStatusResponse"];
 export type DatasetPartStatus = components["schemas"]["DatasetPartStatus"];
 
@@ -41,11 +46,24 @@ export function fetchSamples(): Promise<SampleVideo[]> {
   return request("/api/samples");
 }
 
-export function startRun(sampleId: string): Promise<Job> {
+export function fetchDegradations(): Promise<Degradation[]> {
+  return request("/api/degradations");
+}
+
+/** The transform parameters a severity gives, as the server derives and records them. */
+export function fetchDegradationParameters(
+  kind: DegradationKind,
+  severity: number,
+  signal: AbortSignal,
+): Promise<Record<string, number>> {
+  return request(`/api/degradations/${kind}/parameters?severity=${severity}`, { signal });
+}
+
+export function startRun(sampleId: string, degradation: DegradationSettings): Promise<Job> {
   return request("/api/jobs", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sample_id: sampleId }),
+    body: JSON.stringify({ sample_id: sampleId, degradation }),
   });
 }
 
@@ -61,6 +79,6 @@ export function fetchExperiment(experimentId: string): Promise<Experiment> {
   return request(`/api/experiments/${encodeURIComponent(experimentId)}`);
 }
 
-export function frameImageUrl(experimentId: string, frameIndex: number): string {
-  return `${API_BASE}/api/experiments/${encodeURIComponent(experimentId)}/frames/${frameIndex}`;
+export function frameImageUrl(experimentId: string, variant: FrameVariant, frameIndex: number): string {
+  return `${API_BASE}/api/experiments/${encodeURIComponent(experimentId)}/frames/${variant}/${frameIndex}`;
 }

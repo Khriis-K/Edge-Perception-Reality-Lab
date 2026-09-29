@@ -41,6 +41,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/degradations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Degradations */
+        get: operations["list_degradations_api_degradations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/degradations/{kind}/parameters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Degradation Parameters
+         * @description The transform parameters a severity gives, exactly as a run would record them.
+         */
+        get: operations["degradation_parameters_api_degradations__kind__parameters_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/experiments/{experiment_id}": {
         parameters: {
             query?: never;
@@ -58,7 +95,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/experiments/{experiment_id}/frames/{frame_index}": {
+    "/api/experiments/{experiment_id}/frames/{variant}/{frame_index}": {
         parameters: {
             query?: never;
             header?: never;
@@ -67,9 +104,9 @@ export interface paths {
         };
         /**
          * Get Frame Image
-         * @description One cached frame of a completed experiment. Only known ids are accepted, never a file path.
+         * @description One cached clean or degraded frame of a completed experiment. Only known ids, never a file path.
          */
-        get: operations["get_frame_image_api_experiments__experiment_id__frames__frame_index__get"];
+        get: operations["get_frame_image_api_experiments__experiment_id__frames__variant___frame_index__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -168,6 +205,25 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * AppliedDegradation
+         * @description The settings plus the transform parameters derived from the severity.
+         */
+        AppliedDegradation: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "darkness" | "blur" | "fog" | "noise" | "jpeg";
+            /** Parameters */
+            parameters: {
+                [key: string]: number;
+            };
+            /** Seed */
+            seed: number;
+            /** Severity */
+            severity: number;
+        };
+        /**
          * Box
          * @description Corners in 0-1 image coordinates: (x1, y1) top-left, (x2, y2) bottom-right.
          */
@@ -216,6 +272,33 @@ export interface components {
             /** Root */
             root: string | null;
         };
+        /** Degradation */
+        Degradation: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "darkness" | "blur" | "fog" | "noise" | "jpeg";
+            /** Randomized */
+            randomized: boolean;
+            /** Title */
+            title: string;
+        };
+        /**
+         * DegradationSettings
+         * @description The one degradation an experiment applies. Extra fields are refused, so a second can't sneak in.
+         */
+        DegradationSettings: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "darkness" | "blur" | "fog" | "noise" | "jpeg";
+            /** Seed */
+            seed: number;
+            /** Severity */
+            severity: number;
+        };
         /** Detection */
         Detection: {
             box: components["schemas"]["Box"];
@@ -228,6 +311,7 @@ export interface components {
         Experiment: {
             /** Confidence Floor */
             confidence_floor: number;
+            degradation: components["schemas"]["AppliedDegradation"];
             /** Frame Height */
             frame_height: number;
             /** Frame Width */
@@ -242,8 +326,10 @@ export interface components {
         };
         /** FrameResult */
         FrameResult: {
-            /** Detections */
-            detections: components["schemas"]["Detection"][];
+            /** Clean */
+            clean: components["schemas"]["Detection"][];
+            /** Degraded */
+            degraded: components["schemas"]["Detection"][];
             /** Index */
             index: number;
         };
@@ -303,6 +389,7 @@ export interface components {
         };
         /** StartRunRequest */
         StartRunRequest: {
+            degradation: components["schemas"]["DegradationSettings"];
             /** Sample Id */
             sample_id: string;
         };
@@ -386,6 +473,61 @@ export interface operations {
             };
         };
     };
+    list_degradations_api_degradations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Degradation"][];
+                };
+            };
+        };
+    };
+    degradation_parameters_api_degradations__kind__parameters_get: {
+        parameters: {
+            query: {
+                severity: number;
+            };
+            header?: never;
+            path: {
+                kind: "darkness" | "blur" | "fog" | "noise" | "jpeg";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: number;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_experiment_api_experiments__experiment_id__get: {
         parameters: {
             query?: never;
@@ -417,12 +559,13 @@ export interface operations {
             };
         };
     };
-    get_frame_image_api_experiments__experiment_id__frames__frame_index__get: {
+    get_frame_image_api_experiments__experiment_id__frames__variant___frame_index__get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 experiment_id: string;
+                variant: "clean" | "degraded";
                 frame_index: number;
             };
             cookie?: never;
