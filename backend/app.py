@@ -24,11 +24,14 @@ def create_app(
     dev: bool = False,
     runner: ModelRunner | None = None,
     cache_dir: Path = DEFAULT_CACHE_DIR,
+    dataset_root: Path | None = None,
 ) -> FastAPI:
     """`runner` is the detector; None means no weights are installed, and runs are refused."""
     # No /docs or /redoc: they load Swagger UI and ReDoc from a CDN. /openapi.json stays.
     app = FastAPI(title="Edge Perception Reliability Lab", version="0.1.0", docs_url=None, redoc_url=None)
     app.state.jobs = JobManager(runner, cache_dir)
+    # Fixed for the app's lifetime: the browser never sends a filesystem path.
+    app.state.dataset_root = dataset_root.resolve() if dataset_root else None
     app.include_router(router)
 
     if dev:

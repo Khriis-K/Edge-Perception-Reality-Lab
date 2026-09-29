@@ -1,12 +1,14 @@
 """Start the whole app on one local port: python -m backend"""
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
 import uvicorn
 
 from backend.app import create_app
+from backend.dataset import DATASET_ENV_VAR
 from backend.detection import ModelRunner
 from backend.stub_runner import StubRunner
 from backend.yolox_runner import MODEL_PATH, YoloxRunner
@@ -32,6 +34,12 @@ def build_parser() -> argparse.ArgumentParser:
         default="yolox",
         help="detector to run: YOLOX-Nano on CPU, or a deterministic stub for tests (default: yolox)",
     )
+    parser.add_argument(
+        "--dataset",
+        type=Path,
+        default=os.environ.get(DATASET_ENV_VAR) or None,
+        help=f"local SeeingThroughFog folder (default: ${DATASET_ENV_VAR}; optional, Synthetic mode works without it)",
+    )
     return parser
 
 
@@ -52,7 +60,7 @@ def build_runner(kind: str, model_path: Path) -> ModelRunner | None:
 def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
     runner = build_runner(args.runner, MODEL_PATH)
-    uvicorn.run(create_app(dev=args.dev, runner=runner), host=HOST, port=args.port)
+    uvicorn.run(create_app(dev=args.dev, runner=runner, dataset_root=args.dataset), host=HOST, port=args.port)
 
 
 if __name__ == "__main__":

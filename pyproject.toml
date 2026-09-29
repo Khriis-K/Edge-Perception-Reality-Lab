@@ -20,6 +20,9 @@ dev = [
 [tool.setuptools]
 packages = ["backend"]
 
+[tool.setuptools.package-data]
+backend = ["SeeingThroughFog_sha256sum.txt"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

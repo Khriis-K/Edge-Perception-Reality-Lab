@@ -4,6 +4,8 @@ export type HealthResponse = components["schemas"]["HealthResponse"];
 export type SampleVideo = components["schemas"]["SampleVideo"];
 export type Job = components["schemas"]["JobResponse"];
 export type Experiment = components["schemas"]["Experiment"];
+export type DatasetStatus = components["schemas"]["DatasetStatusResponse"];
+export type DatasetPartStatus = components["schemas"]["DatasetPartStatus"];
 
 // Empty in production: the backend serves this page, so the API is same-origin.
 const API_BASE: string = import.meta.env.VITE_API_BASE ?? "";
@@ -28,6 +30,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function fetchHealth(signal: AbortSignal): Promise<HealthResponse> {
   return request("/api/health", { signal });
+}
+
+/** Re-checks the dataset folder the backend was started with. The browser never sends a path. */
+export function fetchDatasetStatus(signal: AbortSignal): Promise<DatasetStatus> {
+  return request("/api/dataset/status", { signal });
 }
 
 export function fetchSamples(): Promise<SampleVideo[]> {
