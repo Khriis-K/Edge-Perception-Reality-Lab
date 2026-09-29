@@ -49,8 +49,14 @@ over HTTP range requests; nothing downloaded yet.
   `fog20` … `fog100` in 5 m steps, `rain15`, `rain55`. 10 frames per scene, light and condition.
 - Filenames carry the fog density, and every scene has a clear reference, so real chamber fog can be compared
   with synthetic fog at the same visibility on the same scene.
-- Not yet checked: whether scenes are static across conditions (camera and objects unmoved), which would let one
-  set of hand-drawn boxes per scene and light serve all its frames.
+- Viewed via range reads: scene 1 in clear day, fog 50 m day and clear night. It is an indoor fog hall, and the
+  camera and objects do not move between conditions. So one set of hand-drawn boxes per scene should serve all
+  its frames; only scene 1 was compared across conditions.
+- Objects seen in the clear day frames: scene 1 has mannequins, bicycles and furniture (no cars). Scene 2 has 2
+  cars, 3 mannequins and a bicycle. Scene 3 has 2 cars and a mannequin among cones and signs. Scene 4 has 1 car.
+  That is roughly 15–20 scoreable objects in total.
+- The 10 frames per condition are near-duplicates of a static scene, so each condition is about 4 independent
+  scenes, not 40 samples. Results would be case studies, not statistics.
 
 ## Open questions
 
