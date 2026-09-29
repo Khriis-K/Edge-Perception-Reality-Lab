@@ -12,11 +12,13 @@ The user needs a polished, visual project, achievable in roughly three weekends,
 
 Build a locally runnable web application with two complementary evaluation modes that share one detector, one dashboard, and one reporting pipeline. A Python service runs all data processing and inference behind a small local API, and a custom React frontend presents the results, giving full control over layout, overlays, and visualization.
 
-**Real-Weather Benchmark mode** evaluates a pretrained object detector against human-labeled ground truth from the public SeeingThroughFog dataset (Bijelic et al., CVPR 2020). The dataset contains real-world driving scenes in clear weather, fog, snow, and rain, plus fog-chamber recordings, with 2D and 3D bounding-box annotations and per-sample metadata on weather and illumination. The application reports accuracy metrics broken down by weather condition and object class.
+**Real-Weather Benchmark mode** evaluates a pretrained object detector against human-labeled ground truth from the public SeeingThroughFog dataset (Bijelic et al., CVPR 2020). The dataset contains real-world driving scenes in clear weather, fog, snow, and rain, with 2D and 3D bounding-box annotations and per-sample metadata on weather and illumination. The application reports accuracy metrics broken down by weather condition and object class.
 
 **Synthetic Degradation mode** applies controlled degradations to a clean input and compares clean and degraded inference on the same frames. The input is either a short MP4 (the included sample or a user-provided clip) or a subset of clear-weather dataset frames. The first release supports darkness, Gaussian blur, synthetic fog, Gaussian noise, and JPEG compression. When run on unlabeled video, this mode measures consistency against the clean baseline. When run on labeled dataset frames, it also measures accuracy.
 
 The two modes combine into the project's headline analysis: a **sim-to-real comparison** that asks whether synthetic fog applied to clear-weather frames degrades the detector in the same way, and by a similar amount, as real fog.
+
+A separate **fog-chamber case study** uses the PixelAccurateBenchmark dataset (Gruber et al., 3DV 2019): four static scenes recorded in an indoor fog chamber, each with a clear reference and real fog at known visibilities from 20 to 100 m. Because each scene is identical across fog levels, it pairs real and synthetic fog on the same scene. The case study is not a Benchmark-mode condition and is never pooled with road fog.
 
 Each experiment preserves its configuration and results so the user can compare conditions without rerunning inference. The application presents results as an engineering evaluation, not as an operational decision system. It makes uncertainty and limitations visible, avoids claims of guaranteed correctness, and never redistributes dataset imagery.
 
@@ -34,7 +36,7 @@ Each experiment preserves its configuration and results so the user can compare 
 5. As a user, I want to point the application at a local dataset folder, so that the dataset never needs to be copied into the repository.
 6. As a user, I want the application to check which required dataset parts are present and report anything missing in plain language, so that setup failures are understandable.
 7. As a user, I want to know which dataset parts are actually needed, so that I can skip the lidar, radar, gated, and thermal data and save storage.
-8. As a user, I want to verify the downloaded archives against the published checksums, so that I know my copy is intact.
+8. As a user, I want to verify the downloaded archives against the published checksums, so that I know my copy is intact. *(Conditional: kept only if upstream publishes checksums for the per-folder split archives. Otherwise dropped, because zip's per-file CRC32 already catches corruption at extraction.)*
 9. As a user, I want to select a fixed, seeded subset of frames per weather condition, so that experiments run quickly and are reproducible.
 10. As a user, I want the selected subset saved as a manifest file, so that another person can reproduce exactly the same evaluation.
 11. As a user, I want to see how many labeled frames and objects exist per condition and class in my subset, so that I can judge whether the sample is large enough to trust.
@@ -121,6 +123,11 @@ Each experiment preserves its configuration and results so the user can compare 
 68. As a portfolio reviewer, I want the findings presented as a few headline statements backed by charts, so that I can understand the results in under a minute.
 69. As a developer reviewing the project, I want to see the API request a run will send, so that the frontend–backend boundary is visible and inspectable.
 
+### Fog-chamber case study
+
+70. As a user, I want to see, for each object in a fog-chamber scene, the fog visibility at which the detector stops finding it under real fog and under synthetic fog, so that I can compare the two on identical scenes.
+71. As a portfolio reviewer, I want the case study clearly labeled as a small case study with project-made annotations, so that I do not read it as a statistical result.
+
 ## Implementation Decisions
 
 ### Architecture and runtime
@@ -146,13 +153,25 @@ Each experiment preserves its configuration and results so the user can compare 
 
 ### Dataset integration
 
-- The dataset will not be bundled, mirrored, or redistributed. The README will link to the official download page and explain the registration step, the checksum verification, and the two-stage extraction.
+- The dataset will not be bundled, mirrored, or redistributed. The README will link to the official download page and explain the registration step and the extraction. The download is split per folder (for example `cam_stereo_left_lut.z01`…`.zNN` plus `.zip`); there is no single combined archive. Integrity checking follows user story 8: if upstream publishes checksums for the per-folder archives, a command verifies them. Otherwise the README tells the user to check that every `.z01`…`.zNN` part is present and that extraction finishes with no CRC errors.
 - The application will read only three parts of the dataset: the 8-bit tone-mapped left stereo camera images, the ground-truth label files, and the environment metadata labels (weather, road state, illumination). The README will explain how to skip extracting all other sensors.
 - A dataset adapter will parse KITTI-format labels and use only the 2D bounding boxes. 3D box fields will be ignored in this release.
-- The exact metadata vocabulary for weather and illumination will be confirmed during initial data inspection. The adapter will map it to a documented, fixed set of evaluation conditions: at minimum clear, fog, snow, and rain, each split into day and night where the metadata allows. Samples whose condition cannot be determined will be excluded and counted in the report.
-- Fog-chamber samples will be evaluated as a separate condition and not pooled with real-world fog.
+- The adapter will read the refined metadata (`labeltool_labels_refined`), not the original `labeltool_labels`. Data inspection is recorded in `docs/research/seeingthroughfog-data-inspection.md`. The refined files record fog (`fog.yes.denseFog`, `fog.yes.lightFog`) and precipitation (`precipitation.yes.rain`, `precipitation.yes.snow.*`) on separate axes, plus `daytime` and `twilight`. The adapter maps them to a documented, fixed set of evaluation conditions: clear, fog, snow and rain, each split into day and night.
+- Samples whose condition cannot be determined will be excluded and counted in the report. This includes samples with fog plus rain or snow, and samples marked twilight. Before that exclusion rule is committed, the number of mixed fog-plus-precipitation samples will be counted. If they are a large share of all fog samples, a precedence rule will be proposed instead of exclusion.
+- The original and refined files disagree on day or night for 711 samples. Once images are available, about a dozen of them will be spot-checked visually, and which file is right will be recorded.
+- SeeingThroughFog contains no fog-chamber samples: its labelled release is road driving only. Fog-chamber data comes from PixelAccurateBenchmark and is never a Benchmark-mode condition (see Fog-chamber case study).
 - Subsets will be drawn per condition using a stored seed and a configurable cap (default: a few hundred frames per condition). The selected frame identifiers will be written to a manifest file that is part of the experiment configuration.
 - Dataset load failures (missing folders, unreadable images, malformed label lines) will produce plain-language messages naming the missing part, with diagnostic details available for development.
+
+### Fog-chamber case study
+
+- Source: PixelAccurateBenchmark, from the same download service as SeeingThroughFog. The app reads only the 8-bit left camera images (`rgb_left_8bit`, named `scene{1-4}_{day,night}_{condition}_{0-9}.png`). Conditions are `clear`, `fog20` to `fog100` in 5 m steps of meteorological visibility, and `rain15` and `rain55`. Other parts of the archive are not needed, unless depth is chosen for the fog model (see below).
+- It is evaluated in a separate sim-to-real case study. It is never pooled with road fog, never shown in the Benchmark condition table, and never part of Benchmark-mode metrics.
+- Ground truth is hand-drawn 2D boxes on the 8 clear frames (4 scenes × day and night), drawn by the project author. They are not seeded from detector output, because ground truth proposed by the model under test is circular. Before boxes are reused across conditions, every scene is confirmed static (camera and objects unmoved) across fog levels, by day and by night.
+- The annotations are labeled everywhere as project-made. The class mapping and ignore-region rule are the same as in Benchmark mode. Every object stays in the ground truth at every fog level, even where fog makes it physically invisible. That is intended, because the question is when the detector loses it.
+- The primary metric is per-object **breakdown visibility**: the fog visibility at which the object stops being detected (class-aware IoU 0.5). It is measured under real chamber fog and under synthetic fog applied to the clear frame, paired on the same scene. Results are reported per visibility level, never as AP or a pooled row. With about four independent scenes, AP would be noise.
+- The interface and report state that this is a case study, not a statistical result.
+- Open decision (tracked separately): pairing "synthetic fog at visibility X" with "real fog at X" requires mapping synthetic fog severity (a normalized 0–1 value) to meteorological visibility. A physical model (Koschmieder, β = 3/V) needs per-pixel depth, which PixelAccurateBenchmark ships as depth ground truth. The alternative is an empirical severity-to-visibility calibration. This is not decided yet.
 
 ### Class mapping
 
@@ -270,13 +289,14 @@ Each experiment preserves its configuration and results so the user can compare 
 - The frontend will load no third-party scripts, fonts, or analytics at runtime; all assets will be bundled locally.
 - Error messages will be presented in plain language, with detailed diagnostics available for development.
 - The application will explicitly state that it is an educational robustness evaluation and has not been validated for safety-critical or operational use.
-- The README will lead with an animated demonstration, a one-paragraph problem statement, the headline sim-to-real finding, setup instructions for both modes, an architecture diagram, metric definitions, the class mapping, limitations, and ethical-use boundaries. It will cite the SeeingThroughFog paper.
+- The README will lead with an animated demonstration, a one-paragraph problem statement, the headline sim-to-real finding, setup instructions for both modes, an architecture diagram, metric definitions, the class mapping, limitations, and ethical-use boundaries. It will cite the SeeingThroughFog and PixelAccurateBenchmark papers and link each dataset's terms of use.
 
 ## Testing Decisions
 
 - The primary acceptance seam will be the complete browser-visible workflow in both modes. For Benchmark mode, the test will point the app at the fixture dataset, select conditions, run evaluation, inspect results, and export a report. For Synthetic mode, the test will select a valid video, configure one degradation, run synchronized clean/degraded inference, inspect the comparison and metrics, and export a report.
 - A deterministic model-runner substitute will be used in acceptance tests. It will return fixed detections for known fixture frames, so the workflow can be exercised without downloading model weights, requiring a GPU, or depending on nondeterministic inference.
-- The real dataset will never be required by the test suite. A tiny synthetic fixture will mimic the dataset's folder layout, KITTI label format, and metadata structure. It will include each evaluation condition, each mapped class, a fallback-labeled object, and a malformed label line. The fixture will be generated rather than copied from the real dataset.
+- The real dataset will never be required by the test suite. A tiny synthetic fixture will mimic the dataset's folder layout, KITTI label format, and refined metadata structure. It will include each evaluation condition, each mapped class, a fallback-labeled object, a malformed label line, and samples excluded as undeterminable (fog plus precipitation, and twilight). The fixture will be generated rather than copied from the real dataset.
+- The fixture will also include a PixelAccurateBenchmark-style chamber sample: one scene with a clear frame and fog frames at a few visibilities, following the real file naming, plus its project-made boxes. It too will be generated, never copied.
 - One small synthetic video will serve as the canonical video fixture.
 - Acceptance tests will be written with Playwright and drive a real browser against the built frontend served by the backend, exactly as a reviewer would run it.
 - Acceptance tests will verify externally observable behavior rather than React component internals or private helper functions.
@@ -299,8 +319,8 @@ Each experiment preserves its configuration and results so the user can compare 
 ## Out of Scope
 
 - Training or fine-tuning an object-detection model.
-- Creating or labeling a custom dataset.
-- Redistributing, mirroring, or bundling SeeingThroughFog data.
+- Creating or labeling a custom dataset. The one exception is hand-drawn boxes on the 8 clear PixelAccurateBenchmark frames for the fog-chamber case study.
+- Redistributing, mirroring, or bundling SeeingThroughFog or PixelAccurateBenchmark data.
 - Using the dataset's lidar, radar, gated, thermal, stereo-disparity, or vehicle-bus data, or performing multi-sensor fusion.
 - 3D bounding-box evaluation.
 - Claims that benchmark results generalize beyond this dataset, subset, model, and class mapping.
@@ -320,11 +340,19 @@ Each experiment preserves its configuration and results so the user can compare 
 
 - The most important demonstration is failure analysis grounded in real labels. The project should make it easy to answer: "Under which real conditions does the model fail, for which classes, by how much, and does synthetic degradation predict that failure?"
 - A compelling demo sequence is: open the Benchmark view and show average precision dropping from clear to fog to snow; open a real-fog worst frame showing a missed vehicle; switch to Synthetic mode on clear-weather frames and raise fog severity; show the sim-to-real chart comparing the two drops; export the report.
-- The sim-to-real comparison has real confounds. Real fog co-occurs with lower light, different roads, and different traffic, and fog-chamber scenes differ from open-road scenes. The limitations section must say this plainly. A mismatch between synthetic and real results is a legitimate and interesting finding, not a failure of the project.
+- The sim-to-real comparison has real confounds. Real fog co-occurs with lower light, different roads, and different traffic. The limitations section must say this plainly. A mismatch between synthetic and real results is a legitimate and interesting finding, not a failure of the project.
+- The fog-chamber case study removes those confounds but has its own limits, and the limitations section must state them:
+  - it has about four independent scenes and roughly 15–20 objects;
+  - the 10 frames per condition are near-duplicates of a static scene;
+  - the scenes are staged (mannequins, parked cars) in an indoor hall and differ from open roads;
+  - the boxes are project-made, not official annotations;
+  - the result depends on how synthetic severity is mapped to visibility.
+  It is a case study, not a statistical result.
 - Dataset downloads require registration, and the maintainers note that the download service has periodic downtime. Synthetic mode on the bundled sample video must remain fully functional without the dataset, so the project is never blocked on data access.
-- Build order: first build the Python pipeline and FastAPI endpoints for Synthetic mode on the bundled video, verified through API tests. Then build the React shell with the comparison view. Then add the dataset adapter and class mapping, Benchmark mode, and finally the sim-to-real view. Keeping the pipeline behind the API from the start means no frontend work is ever blocked on, or tangled with, ML code.
+- Build order: first build the Python pipeline and FastAPI endpoints for Synthetic mode on the bundled video, verified through API tests. Then build the React shell with the comparison view. Then add the dataset adapter and class mapping, Benchmark mode, and the sim-to-real view. The fog-chamber case study comes last; if it slips, nothing else is affected. Keeping the pipeline behind the API from the start means no frontend work is ever blocked on, or tangled with, ML code.
 - If time becomes constrained, cut polish in this order: multi-tab work area (fall back to one view per section), command palette actions (keep palette navigation only), keyboard sequences beyond the arrows, L, and P, and the Setup request preview. Preserve the workbench shell, frame viewer, job dock, and Findings layout.
 - Also preserve Synthetic mode end to end, per-condition average precision in Benchmark mode, the class mapping and ignore-region documentation, latency measurement, the worst-frame gallery, and the limitations statement. Defer the precision-recall curves, day/night splitting, server-sent events (polling is sufficient), and additional styling before removing those elements.
 - Success means a reviewer can clone the project, run the synthetic demo with one documented command on CPU, optionally connect a local copy of the dataset and reproduce the benchmark from the committed manifest, understand the system within two minutes, and see both useful model behavior and honest failures.
 - Reference: Bijelic et al., "Seeing Through Fog Without Seeing Fog: Deep Multimodal Sensor Fusion in Unseen Adverse Weather," CVPR 2020. Dataset code repository: https://github.com/princeton-computational-imaging/SeeingThroughFog
-- This specification is tracked in GitHub Issues for `Khriis-K/Edge-Perception-Reality-Lab`. It is broken into issues #1–#23, each labeled `ready-for-agent` with its blocking issues listed under "Blocked by".
+- Reference: Gruber et al., "Pixel-Accurate Depth Evaluation in Realistic Driving Scenarios," 3DV 2019 (arXiv:1906.08953). Source of the PixelAccurateBenchmark fog-chamber recordings.
+- This specification is tracked in GitHub Issues for `Khriis-K/Edge-Perception-Reality-Lab`. It is broken into issues #1–#23 and #30–#33, each labeled `ready-for-agent` or `ready-for-human`, with blocking issues listed under "Blocked by".
