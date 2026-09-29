@@ -2,12 +2,13 @@
 
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Request
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from backend.dataset import FrameNotFound, camera_image, check_readiness
-from backend.jobs import Experiment, Job, JobManager, JobStatus, NoDetector
+from backend.degradations import KINDS, RANDOMIZED, TITLES, DegradationKind, parameters
+from backend.jobs import DegradationSettings, Experiment, FrameVariant, Job, JobManager, JobStatus, NoDetector
 from backend.samples import SAMPLES
 
 router = APIRouter(prefix="/api")
@@ -34,8 +35,19 @@ class SampleVideo(BaseModel):
     title: str
 
 
+class Degradation(BaseModel):
+    kind: DegradationKind
+    title: str
+    # True when the seed changes the output.
+    randomized: bool
+
+
 class StartRunRequest(BaseModel):
+    # Refuse unknown fields, so a second degradation can't ride along under another name.
+    model_config = ConfigDict(extra="forbid")
+
     sample_id: str
+    degradation: DegradationSettings
 
     @field_validator("sample_id")
     @classmethod
@@ -109,10 +121,23 @@ def list_samples() -> list[SampleVideo]:
     return [SampleVideo(id=s.id, title=s.title) for s in SAMPLES.values()]
 
 
+@router.get("/degradations")
+def list_degradations() -> list[Degradation]:
+    return [Degradation(kind=kind, title=TITLES[kind], randomized=kind in RANDOMIZED) for kind in KINDS]
+
+
+@router.get("/degradations/{kind}/parameters")
+def degradation_parameters(
+    kind: DegradationKind, severity: Annotated[float, Query(ge=0, le=1, allow_inf_nan=False)]
+) -> dict[str, float]:
+    """The transform parameters a severity gives, exactly as a run would record them."""
+    return parameters(kind, severity)
+
+
 @router.post("/jobs", status_code=202)
 def start_run(body: StartRunRequest, jobs: Jobs) -> JobResponse:
     try:
-        return JobResponse.of(jobs.start(SAMPLES[body.sample_id]))
+        return JobResponse.of(jobs.start(SAMPLES[body.sample_id], body.degradation))
     except NoDetector:
         raise HTTPException(status_code=503, detail=NO_MODEL_MESSAGE)
 
@@ -136,13 +161,15 @@ def get_experiment(experiment_id: str, jobs: Jobs) -> Experiment:
 
 
 @router.get(
-    "/experiments/{experiment_id}/frames/{frame_index}",
+    "/experiments/{experiment_id}/frames/{variant}/{frame_index}",
     response_class=FileResponse,
     responses={200: {"content": {"image/jpeg": {}}}},
 )
-def get_frame_image(experiment_id: str, frame_index: Annotated[int, Path(ge=0)], jobs: Jobs) -> FileResponse:
-    """One cached frame of a completed experiment. Only known ids are accepted, never a file path."""
-    path = jobs.frame_path(experiment_id, frame_index)
+def get_frame_image(
+    experiment_id: str, variant: FrameVariant, frame_index: Annotated[int, Path(ge=0)], jobs: Jobs
+) -> FileResponse:
+    """One cached clean or degraded frame of a completed experiment. Only known ids, never a file path."""
+    path = jobs.frame_path(experiment_id, variant, frame_index)
     if path is None:
         raise HTTPException(status_code=404, detail="No such frame.")
     return FileResponse(path, media_type="image/jpeg")

@@ -1,13 +1,14 @@
 import { Switch } from "@blueprintjs/core";
 import { useId, useState } from "react";
-import { frameImageUrl, type Experiment } from "./api/client";
+import { frameImageUrl, type Experiment, type FrameVariant } from "./api/client";
 import { detectionLabel, toOverlayRect, visibleDetections, type Detection } from "./overlay";
 
 const DEFAULT_THRESHOLD = 0.25;
 
 /**
- * One experiment's frames with their detections drawn over them. Threshold and overlay changes
- * filter the detections already loaded; they never ask the server to run inference again.
+ * One experiment's clean and degraded frames side by side, with their detections drawn over them.
+ * One scrubber drives both panes, so they always show the same frame. Threshold and overlay
+ * changes filter the detections already loaded; they never ask the server to run inference again.
  */
 export function FrameViewer({ experiment }: { experiment: Experiment }) {
   const [frameIndex, setFrameIndex] = useState(0);
@@ -17,8 +18,19 @@ export function FrameViewer({ experiment }: { experiment: Experiment }) {
   const frameId = useId();
 
   const frame = experiment.frames[frameIndex];
-  const detections = visibleDetections(frame.detections, threshold);
   const lastFrame = experiment.frames.length - 1;
+  const { kind, severity } = experiment.degradation;
+  const pane = (variant: FrameVariant, title: string, detections: Detection[]) => (
+    <FramePane
+      experiment={experiment}
+      variant={variant}
+      title={title}
+      frameIndex={frameIndex}
+      detections={visibleDetections(detections, threshold)}
+      threshold={threshold}
+      showOverlays={showOverlays}
+    />
+  );
 
   return (
     <section aria-label="Frame viewer" className="frame-viewer">
@@ -42,16 +54,11 @@ export function FrameViewer({ experiment }: { experiment: Experiment }) {
         />
       </div>
 
-      <figure className="frame">
-        <div className="frame-stack" style={{ aspectRatio: `${experiment.frame_width} / ${experiment.frame_height}` }}>
-          <img src={frameImageUrl(experiment.id, frameIndex)} alt={`Frame ${frameIndex + 1} of the sample video`} />
-          {showOverlays && <DetectionOverlay detections={detections} />}
-        </div>
-        <figcaption>
-          {detections.length} detections at or above {threshold.toFixed(2)}. Boxes are model outputs, not ground
-          truth.
-        </figcaption>
-      </figure>
+      <div className="frame-panes">
+        {pane("clean", "Clean", frame.clean)}
+        {pane("degraded", `Degraded: ${kind}, severity ${severity.toFixed(2)}`, frame.degraded)}
+      </div>
+      <p className="viewer-note">Boxes are model outputs, not ground truth.</p>
 
       <div className="scrubber">
         <label htmlFor={frameId}>Frame</label>
@@ -72,10 +79,42 @@ export function FrameViewer({ experiment }: { experiment: Experiment }) {
   );
 }
 
-/** Boxes in percent units, so the layer stays aligned with the image at any size. */
-function DetectionOverlay({ detections }: { detections: Detection[] }) {
+interface FramePaneProps {
+  experiment: Experiment;
+  variant: FrameVariant;
+  title: string;
+  frameIndex: number;
+  detections: Detection[];
+  threshold: number;
+  showOverlays: boolean;
+}
+
+/** One side of the comparison. Its title is text, so clean vs. degraded never rests on color alone. */
+function FramePane({ experiment, variant, title, frameIndex, detections, threshold, showOverlays }: FramePaneProps) {
+  const name = variant === "clean" ? "Clean" : "Degraded";
   return (
-    <svg className="overlay" role="list" aria-label="Detections (model outputs)">
+    <figure className={`frame ${variant}`} aria-label={`${name} frame`}>
+      <figcaption className="pane-title">
+        {title} <span className="pane-frame">· frame {frameIndex + 1}</span>
+      </figcaption>
+      <div className="frame-stack" style={{ aspectRatio: `${experiment.frame_width} / ${experiment.frame_height}` }}>
+        <img
+          src={frameImageUrl(experiment.id, variant, frameIndex)}
+          alt={`${name} frame ${frameIndex + 1} of the sample video`}
+        />
+        {showOverlays && <DetectionOverlay name={`${name} detections (model outputs)`} detections={detections} />}
+      </div>
+      <p className="pane-count">
+        {detections.length} detections at or above {threshold.toFixed(2)}
+      </p>
+    </figure>
+  );
+}
+
+/** Boxes in percent units, so the layer stays aligned with the image at any size. */
+function DetectionOverlay({ name, detections }: { name: string; detections: Detection[] }) {
+  return (
+    <svg className="overlay" role="list" aria-label={name}>
       {detections.map((detection, i) => {
         const rect = toOverlayRect(detection.box);
         return (

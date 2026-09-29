@@ -3,10 +3,13 @@ import { expect, test, type Page } from "@playwright/test";
 
 // The e2e server runs the deterministic stub runner (see playwright.config.ts): on the synthetic
 // sample it reports a car (0.90) and a person (0.30) in all 48 frames, with the car moving right.
+// These tests look at the clean pane; degradation.spec.ts covers the degraded one.
 
 const pill = (page: Page) => page.getByRole("progressbar", { name: "Job progress" });
 const viewer = (page: Page) => page.getByRole("region", { name: "Frame viewer" });
-const detections = (page: Page) => viewer(page).getByRole("list", { name: /Detections/ }).getByRole("listitem");
+const cleanPane = (page: Page) => viewer(page).getByRole("figure", { name: "Clean frame" });
+const detections = (page: Page) =>
+  cleanPane(page).getByRole("list", { name: "Clean detections (model outputs)" }).getByRole("listitem");
 
 async function startRun(page: Page) {
   await page.goto("/synthetic");
@@ -37,7 +40,7 @@ test("runs detection on the sample video, showing progress, then scrubs frames w
   await expect(detections(page).filter({ hasText: "person 0.30" })).toHaveCount(1);
   await expect(viewer(page).getByText("model outputs, not ground truth")).toBeVisible();
 
-  const image = viewer(page).getByRole("img");
+  const image = cleanPane(page).getByRole("img");
   await expect.poll(() => image.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(320);
   const car = detections(page).filter({ hasText: "car" }).locator("rect");
   const firstX = await car.getAttribute("x");
@@ -46,7 +49,7 @@ test("runs detection on the sample video, showing progress, then scrubs frames w
   await viewer(page).getByLabel("Frame", { exact: true }).fill("30");
 
   await expect(viewer(page).getByText("31 / 48")).toBeVisible();
-  await expect(image).toHaveAttribute("src", /\/frames\/30$/);
+  await expect(image).toHaveAttribute("src", /\/frames\/clean\/30$/);
   await expect.poll(() => image.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth)).toBe(320);
   await expect(car).not.toHaveAttribute("x", firstX!);
   const x = (value: string | null) => parseFloat(value ?? "");
@@ -72,8 +75,10 @@ test("threshold and overlay toggle change the view with no new inference request
   await expect(detections(page)).toHaveCount(2);
 
   await viewer(page).getByText("Show overlays").click();
-  await expect(viewer(page).getByRole("list", { name: /Detections/ })).toHaveCount(0);
-  await expect(viewer(page).getByRole("img")).toBeVisible();
+  await expect(viewer(page).getByRole("list", { name: /detections/i })).toHaveCount(0);
+  await expect(viewer(page).getByRole("img")).toHaveCount(2);
+  await expect(cleanPane(page).getByRole("img")).toBeVisible();
+  await expect(viewer(page).getByRole("figure", { name: "Degraded frame" }).getByRole("img")).toBeVisible();
 
   await viewer(page).getByText("Show overlays").click();
   await expect(detections(page)).toHaveCount(2);

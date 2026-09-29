@@ -2,11 +2,16 @@ import { Button, HTMLSelect } from "@blueprintjs/core";
 import { useEffect, useState } from "react";
 import { fetchExperiment, fetchSamples, type Experiment, type Job, type SampleVideo } from "./api/client";
 import { isActive, useCurrentJob } from "./CurrentJob";
+import { useDegradationSettings } from "./DegradationSettings";
 import { FrameViewer } from "./FrameViewer";
 
-/** Synthetic screen: pick the sample video, run the detector on it, and inspect every frame. */
+/**
+ * Synthetic screen: pick the sample video and run it with the degradation set in the inspector,
+ * then compare clean and degraded frames side by side.
+ */
 export function SyntheticRun() {
   const { job, error, start, cancel } = useCurrentJob();
+  const { settings } = useDegradationSettings();
   const [samples, setSamples] = useState<SampleVideo[]>([]);
   const [sampleId, setSampleId] = useState("");
   const [samplesError, setSamplesError] = useState<string | null>(null);
@@ -28,7 +33,7 @@ export function SyntheticRun() {
         className="run-form"
         onSubmit={(event) => {
           event.preventDefault();
-          start(sampleId);
+          start(sampleId, settings);
         }}
       >
         <label>
