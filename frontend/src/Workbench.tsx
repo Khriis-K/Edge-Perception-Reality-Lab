@@ -2,6 +2,7 @@ import { Tab, Tabs } from "@blueprintjs/core";
 import { Navigate, useParams } from "react-router";
 import { DatasetSetup } from "./DatasetSetup";
 import { Rail } from "./Rail";
+import { SyntheticRun } from "./SyntheticRun";
 import { findSection, type Section } from "./sections";
 import { TopBar } from "./TopBar";
 
@@ -46,7 +47,13 @@ function Overview({ section }: { section: Section }) {
   return (
     <div className="work-body">
       <h1>{section.label}</h1>
-      {section.id === "setup" ? <DatasetSetup /> : <p className="empty-state">Nothing here yet.</p>}
+      {section.id === "synthetic" ? (
+        <SyntheticRun />
+      ) : section.id === "setup" ? (
+        <DatasetSetup />
+      ) : (
+        <p className="empty-state">Nothing here yet.</p>
+      )}
     </div>
   );
 }

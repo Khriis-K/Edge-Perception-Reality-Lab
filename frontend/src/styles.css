@@ -9,6 +9,7 @@
   --muted: #abb3bf; /* GRAY4 */
   --ok: #72ca9b; /* GREEN5 */
   --warn: #fbb360; /* ORANGE5 */
+  --clean: #8abbff; /* BLUE5: clean results and predictions */
   --sans: "IBM Plex Sans", system-ui, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, monospace;
 }
@@ -290,6 +291,127 @@ p {
 
 .work-body .empty-state {
   padding: 0;
+}
+
+/* --- job pill -------------------------------------------------------------- */
+
+.job-pill {
+  height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--clean);
+  border-radius: 2px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--clean);
+}
+
+.job-pill-mode {
+  text-transform: capitalize;
+}
+
+/* --- synthetic run --------------------------------------------------------- */
+
+.synthetic-run {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.run-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.run-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--muted);
+}
+
+.run-status {
+  color: var(--muted);
+}
+
+.run-error {
+  color: var(--warn);
+}
+
+/* --- frame viewer ------------------------------------------------------------ */
+
+.frame-viewer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 960px;
+}
+
+.viewer-toolbar,
+.scrubber {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.viewer-toolbar .overlay-switch {
+  margin: 0 0 0 auto;
+}
+
+.scrubber input {
+  flex: 1;
+}
+
+.frame {
+  margin: 0;
+}
+
+.frame-stack {
+  position: relative;
+  width: 100%;
+  background: var(--chrome);
+}
+
+.frame-stack img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Same box as the image, so percent coordinates land on the right pixels at any size. */
+.overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.overlay rect {
+  fill: none;
+  stroke: var(--clean);
+  stroke-width: 2px;
+}
+
+/* Every box carries a text label, so meaning never depends on color alone. */
+.overlay text {
+  fill: var(--clean);
+  font-family: var(--mono);
+  font-size: 12px;
+  paint-order: stroke;
+  stroke: var(--chrome);
+  stroke-width: 3px;
+}
+
+.frame figcaption {
+  margin-top: 6px;
+  color: var(--muted);
 }
 
 /* --- setup: dataset -------------------------------------------------------- */

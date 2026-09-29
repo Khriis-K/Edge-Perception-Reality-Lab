@@ -1,18 +1,79 @@
 """HTTP API routes. Pydantic models here define the OpenAPI schema the frontend types come from."""
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Path, Request
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from backend.dataset import FrameNotFound, camera_image, check_readiness
+from backend.jobs import Experiment, Job, JobManager, JobStatus, NoDetector
+from backend.samples import SAMPLES
 
 router = APIRouter(prefix="/api")
+
+NO_MODEL_MESSAGE = (
+    "The detector's weights are not installed. Fetch them with "
+    "`.venv/Scripts/python.exe scripts/fetch_model.py`, then restart the app."
+)
+
+
+def get_jobs(request: Request) -> JobManager:
+    return request.app.state.jobs
+
+
+Jobs = Annotated[JobManager, Depends(get_jobs)]
 
 
 class HealthResponse(BaseModel):
     status: Literal["ok"]
+
+
+class SampleVideo(BaseModel):
+    id: str
+    title: str
+
+
+class StartRunRequest(BaseModel):
+    sample_id: str
+
+    @field_validator("sample_id")
+    @classmethod
+    def known_sample(cls, sample_id: str) -> str:
+        if sample_id not in SAMPLES:
+            raise ValueError(f"Unknown sample video: {sample_id!r}")
+        return sample_id
+
+
+class JobResponse(BaseModel):
+    id: str
+    experiment_id: str
+    mode: Literal["synthetic"]
+    status: JobStatus
+    frames_done: int
+    frames_total: int
+    progress: float
+    error: str | None
+
+    @classmethod
+    def of(cls, job: Job) -> "JobResponse":
+        if job.status == "completed":
+            progress = 1.0
+        elif job.frames_total:
+            # The container's frame count is an estimate, so never report past 100%.
+            progress = min(job.frames_done / job.frames_total, 1.0)
+        else:
+            progress = 0.0
+        return cls(
+            id=job.id,
+            experiment_id=job.experiment_id,
+            mode="synthetic",
+            status=job.status,
+            frames_done=job.frames_done,
+            frames_total=job.frames_total,
+            progress=progress,
+            error=job.error,
+        )
 
 
 class DatasetPartStatus(BaseModel):
@@ -41,6 +102,56 @@ class DatasetStatusResponse(BaseModel):
 @router.get("/health")
 def health() -> HealthResponse:
     return HealthResponse(status="ok")
+
+
+@router.get("/samples")
+def list_samples() -> list[SampleVideo]:
+    return [SampleVideo(id=s.id, title=s.title) for s in SAMPLES.values()]
+
+
+@router.post("/jobs", status_code=202)
+def start_run(body: StartRunRequest, jobs: Jobs) -> JobResponse:
+    try:
+        return JobResponse.of(jobs.start(SAMPLES[body.sample_id]))
+    except NoDetector:
+        raise HTTPException(status_code=503, detail=NO_MODEL_MESSAGE)
+
+
+@router.get("/jobs/{job_id}")
+def get_job(job_id: str, jobs: Jobs) -> JobResponse:
+    return JobResponse.of(_known_job(jobs.get(job_id)))
+
+
+@router.post("/jobs/{job_id}/cancel")
+def cancel_job(job_id: str, jobs: Jobs) -> JobResponse:
+    return JobResponse.of(_known_job(jobs.cancel(job_id)))
+
+
+@router.get("/experiments/{experiment_id}")
+def get_experiment(experiment_id: str, jobs: Jobs) -> Experiment:
+    experiment = jobs.experiment(experiment_id)
+    if experiment is None:
+        raise HTTPException(status_code=404, detail="No completed experiment with that id.")
+    return experiment
+
+
+@router.get(
+    "/experiments/{experiment_id}/frames/{frame_index}",
+    response_class=FileResponse,
+    responses={200: {"content": {"image/jpeg": {}}}},
+)
+def get_frame_image(experiment_id: str, frame_index: Annotated[int, Path(ge=0)], jobs: Jobs) -> FileResponse:
+    """One cached frame of a completed experiment. Only known ids are accepted, never a file path."""
+    path = jobs.frame_path(experiment_id, frame_index)
+    if path is None:
+        raise HTTPException(status_code=404, detail="No such frame.")
+    return FileResponse(path, media_type="image/jpeg")
+
+
+def _known_job(job: Job | None) -> Job:
+    if job is None:
+        raise HTTPException(status_code=404, detail="No job with that id.")
+    return job
 
 
 @router.get("/dataset/status")
