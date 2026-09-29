@@ -1,19 +1,16 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import { fetchSubset, type ConditionSummary, type Manifest, type Subset } from "./api/client";
 
-const DEFAULT_SEED = 0;
-const DEFAULT_CAP = 300;
-const MAX_CAP = 100_000; // the server's limit
+/** The seed and cap the user chose; null until they change one, so the server's defaults apply. */
+type Choice = { seed: number; cap: number } | null;
 
 /**
  * The seeded subset: up to `cap` frames per condition, drawn with `seed`. Shows per condition how many frames and
  * objects it holds and its rarest class, flags conditions too small to trust, and offers the manifest to save.
  */
 export function SubsetTable({ ready }: { ready: boolean }) {
-  const [seed, setSeed] = useState(DEFAULT_SEED);
-  const [cap, setCap] = useState(DEFAULT_CAP);
-  const { subset, error, loading } = useSubset(ready, seed, cap);
-  const ids = { seed: useId(), cap: useId() };
+  const [choice, setChoice] = useState<Choice>(null);
+  const { subset, error, loading } = useSubset(ready, choice);
 
   return (
     <section aria-labelledby="subset-heading" className="subset">
@@ -22,33 +19,8 @@ export function SubsetTable({ ready }: { ready: boolean }) {
         <p className="dataset-message">The subset needs a ready dataset.</p>
       ) : (
         <>
-          <div className="subset-controls">
-            <div className="field">
-              <label htmlFor={ids.seed}>Seed</label>
-              <input
-                id={ids.seed}
-                className="bp6-input"
-                type="number"
-                min={0}
-                step={1}
-                value={seed}
-                onChange={(e) => setSeed(toWhole(e.target.value, 0, Number.MAX_SAFE_INTEGER))}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor={ids.cap}>Frames per condition</label>
-              <input
-                id={ids.cap}
-                className="bp6-input"
-                type="number"
-                min={1}
-                max={MAX_CAP}
-                step={1}
-                value={cap}
-                onChange={(e) => setCap(toWhole(e.target.value, 1, MAX_CAP))}
-              />
-            </div>
-          </div>
+          {/* Until the user picks, the inputs show what the server drew with: its defaults and limits are the only copy. */}
+          {subset && <Controls subset={subset} choice={choice} onChange={setChoice} />}
 
           <p aria-live="polite" className="dataset-message">
             {error
@@ -62,6 +34,41 @@ export function SubsetTable({ ready }: { ready: boolean }) {
         </>
       )}
     </section>
+  );
+}
+
+function Controls({ subset, choice, onChange }: { subset: Subset; choice: Choice; onChange: (choice: Choice) => void }) {
+  const { seed, cap } = choice ?? subset.manifest;
+  const ids = { seed: useId(), cap: useId() };
+
+  return (
+    <div className="subset-controls">
+      <div className="field">
+        <label htmlFor={ids.seed}>Seed</label>
+        <input
+          id={ids.seed}
+          className="bp6-input"
+          type="number"
+          min={0}
+          step={1}
+          value={seed}
+          onChange={(e) => onChange({ seed: toWhole(e.target.value, 0, Number.MAX_SAFE_INTEGER), cap })}
+        />
+      </div>
+      <div className="field">
+        <label htmlFor={ids.cap}>Frames per condition</label>
+        <input
+          id={ids.cap}
+          className="bp6-input"
+          type="number"
+          min={1}
+          max={subset.max_cap}
+          step={1}
+          value={cap}
+          onChange={(e) => onChange({ seed, cap: toWhole(e.target.value, 1, subset.max_cap) })}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -154,7 +161,7 @@ function ManifestLink({ manifest }: { manifest: Manifest }) {
   );
 }
 
-function useSubset(ready: boolean, seed: number, cap: number) {
+function useSubset(ready: boolean, choice: Choice) {
   const [subset, setSubset] = useState<Subset | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -163,7 +170,7 @@ function useSubset(ready: boolean, seed: number, cap: number) {
     if (!ready) return;
     const controller = new AbortController();
     setLoading(true);
-    fetchSubset(seed, cap, controller.signal)
+    fetchSubset(choice, controller.signal)
       .then((result) => {
         setSubset(result);
         setError(null);
@@ -175,7 +182,7 @@ function useSubset(ready: boolean, seed: number, cap: number) {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [ready, seed, cap]);
+  }, [ready, choice]);
 
   return { subset, error, loading };
 }

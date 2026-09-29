@@ -50,7 +50,8 @@ export interface paths {
         };
         /**
          * Dataset Subset
-         * @description The seeded per-condition subset: its manifest and the counts for the Subset table.
+         * @description The seeded per-condition subset: its manifest and the counts for the Subset table. With no seed or cap,
+         *     the defaults are used, and the manifest says which.
          */
         get: operations["dataset_subset_api_dataset_subset_get"];
         put?: never;
@@ -454,6 +455,8 @@ export interface components {
             /** Low N Objects */
             low_n_objects: number;
             manifest: components["schemas"]["Manifest"];
+            /** Max Cap */
+            max_cap: number;
             /** Problems */
             problems: string[];
         };

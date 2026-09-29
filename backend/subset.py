@@ -4,21 +4,14 @@ import random
 from dataclasses import dataclass
 
 from backend.conditions import CONDITIONS, VOCABULARY_VERSION
+from backend.dataset import Frame
 from backend.labels import MAIN_CLASSES
 
 DEFAULT_SEED = 0
 DEFAULT_CAP = 300
+MAX_CAP = 100_000
 # A per-class AP over fewer objects than this is mostly noise, so the condition is flagged "low n".
 LOW_N_OBJECTS = 30
-
-
-@dataclass(frozen=True)
-class Frame:
-    """A usable sample: its condition is determined and its labels parsed cleanly."""
-
-    id: str
-    condition: str
-    class_counts: dict[str, int]  # main classes only
 
 
 @dataclass(frozen=True)

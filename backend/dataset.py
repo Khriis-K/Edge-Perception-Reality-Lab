@@ -13,7 +13,6 @@ from pathlib import Path
 
 from backend.conditions import Excluded, assign_condition
 from backend.labels import MAIN_CLASSES, parse_labels
-from backend.subset import Frame
 
 DATASET_ENV_VAR = "EDGE_LAB_DATASET"
 
@@ -72,6 +71,15 @@ class DatasetStatus:
     message: str
     parts: list[PartStatus]
     not_needed: list[str]
+
+
+@dataclass(frozen=True)
+class Frame:
+    """A usable sample: its condition is determined and its labels parsed cleanly."""
+
+    id: str
+    condition: str
+    class_counts: dict[str, int]  # main classes only
 
 
 @dataclass(frozen=True)

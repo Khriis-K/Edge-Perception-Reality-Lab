@@ -5,7 +5,8 @@ import random
 import pytest
 
 from backend.conditions import CONDITIONS, VOCABULARY_VERSION
-from backend.subset import LOW_N_OBJECTS, Frame, draw_subset, summarize
+from backend.dataset import Frame
+from backend.subset import LOW_N_OBJECTS, draw_subset, summarize
 
 
 def frames(condition, n, start=0, counts=None):

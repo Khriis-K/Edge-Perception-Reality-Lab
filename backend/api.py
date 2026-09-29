@@ -10,7 +10,16 @@ from backend.dataset import DatasetIndex, FrameNotFound, camera_image, check_rea
 from backend.degradations import KINDS, RANDOMIZED, TITLES, DegradationKind, parameters
 from backend.jobs import DegradationSettings, Experiment, FrameVariant, Job, JobManager, JobStatus, NoDetector
 from backend.samples import SAMPLES
-from backend.subset import DEFAULT_CAP, DEFAULT_SEED, LOW_N_OBJECTS, ConditionSummary, Manifest, draw_subset, summarize
+from backend.subset import (
+    DEFAULT_CAP,
+    DEFAULT_SEED,
+    LOW_N_OBJECTS,
+    MAX_CAP,
+    ConditionSummary,
+    Manifest,
+    draw_subset,
+    summarize,
+)
 
 router = APIRouter(prefix="/api")
 
@@ -119,6 +128,7 @@ class SubsetResponse(BaseModel):
     excluded: dict[str, int]  # reason -> samples, over the whole dataset
     problems: list[str]
     low_n_objects: int  # a condition whose rarest class has fewer objects is flagged low n
+    max_cap: int  # the largest per-condition cap the server accepts
 
 
 @router.get("/health")
@@ -214,9 +224,10 @@ def dataset_frame(sample_id: str, request: Request) -> FileResponse:
 def dataset_subset(
     request: Request,
     seed: Annotated[int, Query(ge=0)] = DEFAULT_SEED,
-    cap: Annotated[int, Query(ge=1, le=100_000)] = DEFAULT_CAP,
+    cap: Annotated[int, Query(ge=1, le=MAX_CAP)] = DEFAULT_CAP,
 ) -> SubsetResponse:
-    """The seeded per-condition subset: its manifest and the counts for the Subset table."""
+    """The seeded per-condition subset: its manifest and the counts for the Subset table. With no seed or cap,
+    the defaults are used, and the manifest says which."""
     index = _dataset_index(request)
     manifest = draw_subset(index.frames, seed, cap)
     return SubsetResponse(
@@ -226,6 +237,7 @@ def dataset_subset(
         excluded=index.excluded,
         problems=index.problems,
         low_n_objects=LOW_N_OBJECTS,
+        max_cap=MAX_CAP,
     )
 
 

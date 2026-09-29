@@ -70,6 +70,13 @@ def test_bad_seed_or_cap_is_rejected(client, params):
     assert client.get("/api/dataset/subset", params=params).status_code == 422
 
 
+def test_the_largest_cap_is_reported_and_enforced(client):
+    max_cap = client.get("/api/dataset/subset").json()["max_cap"]
+
+    assert client.get("/api/dataset/subset", params={"cap": max_cap}).status_code == 200
+    assert client.get("/api/dataset/subset", params={"cap": max_cap + 1}).status_code == 422
+
+
 def test_subset_needs_a_ready_dataset(tmp_path):
     client = TestClient(create_app(static_dir=tmp_path / "no-dist"))
 

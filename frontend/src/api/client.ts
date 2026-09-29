@@ -45,9 +45,11 @@ export function fetchDatasetStatus(signal: AbortSignal): Promise<DatasetStatus> 
   return request("/api/dataset/status", { signal });
 }
 
-/** The seeded per-condition subset of the dataset: its manifest and the Subset table's counts. */
-export function fetchSubset(seed: number, cap: number, signal: AbortSignal): Promise<Subset> {
-  return request(`/api/dataset/subset?seed=${seed}&cap=${cap}`, { signal });
+/** The seeded per-condition subset of the dataset: its manifest and the Subset table's counts. Without a
+ * seed and cap, the server uses its defaults, and the manifest says which. */
+export function fetchSubset(choice: { seed: number; cap: number } | null, signal: AbortSignal): Promise<Subset> {
+  const query = choice ? `?seed=${choice.seed}&cap=${choice.cap}` : "";
+  return request(`/api/dataset/subset${query}`, { signal });
 }
 
 export function fetchSamples(): Promise<SampleVideo[]> {
