@@ -1,5 +1,5 @@
 import { Button, Drawer, Tab, Tabs } from "@blueprintjs/core";
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Navigate, useParams } from "react-router";
 import { DatasetSetup } from "./DatasetSetup";
 import { Rail } from "./Rail";
@@ -17,6 +17,10 @@ export function Workbench() {
   const wide = useMediaQuery(WIDE_LAYOUT);
   // Lives here, not in the drawer, so selecting something (#12, #19) can open the inspector too.
   const [inspectorOpen, setInspectorOpen] = useState(false);
+  // The panel replaces the drawer when the window widens; without this it would reopen on narrowing.
+  useEffect(() => {
+    if (wide) setInspectorOpen(false);
+  }, [wide]);
   if (!section) return <Navigate to="/setup" replace />;
 
   const inspector = <InspectorContent />;

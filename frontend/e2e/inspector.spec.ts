@@ -82,6 +82,19 @@ test.describe("below 1280 px", () => {
     await expect(toggle(page)).toBeFocused();
   });
 
+  test("an open drawer closes when the window widens, and stays closed on narrowing again", async ({ page }) => {
+    await page.goto("/setup");
+    await toggle(page).click();
+    await expect(drawer(page)).toBeFocused();
+
+    await page.setViewportSize(WIDE);
+    await expect(panel(page)).toBeVisible();
+    await page.setViewportSize(NARROW);
+
+    await expect(toggle(page)).toBeVisible();
+    await expect(drawer(page)).toHaveCount(0);
+  });
+
   test("Tab stays inside the open drawer", async ({ page }) => {
     await page.goto("/setup");
     await toggle(page).click();
