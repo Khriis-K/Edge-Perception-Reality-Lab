@@ -291,3 +291,87 @@ p {
 .work-body .empty-state {
   padding: 0;
 }
+
+/* --- setup: dataset -------------------------------------------------------- */
+
+.dataset-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 760px;
+  margin-top: 16px;
+}
+
+.dataset-setup h2 {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.dataset-setup h3 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.dataset-folder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dataset-folder input {
+  flex: 1;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--panel);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.dataset-parts,
+.dataset-not-needed ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dataset-part {
+  display: flex;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.dataset-part[data-present="true"] > .bp6-icon {
+  color: var(--ok);
+}
+
+.dataset-part[data-present="false"] > .bp6-icon {
+  color: var(--warn);
+}
+
+.dataset-part code,
+.dataset-setup details code,
+.dataset-not-needed code {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.dataset-part-message,
+.dataset-not-needed li,
+.dataset-not-needed p {
+  color: var(--muted);
+}
+
+.dataset-setup details {
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.dataset-not-needed li::before {
+  content: "– ";
+}
