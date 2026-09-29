@@ -21,6 +21,7 @@ class DatasetPartStatus(BaseModel):
     key: Literal["camera", "labels", "metadata"]
     name: str
     folder: str
+    checked: bool
     present: bool
     message: str
     detail: str

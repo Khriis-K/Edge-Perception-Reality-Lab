@@ -100,6 +100,22 @@ def test_dataset_folder_that_does_not_exist(tmp_path):
     assert not any(p.present for p in status.parts)
 
 
+def test_parts_are_not_checked_when_the_folder_is_unusable(tmp_path):
+    missing = tmp_path / "nowhere"
+
+    status = check_readiness(missing)
+
+    for p in status.parts:
+        assert not p.checked
+        assert str(missing) in p.detail  # says what was actually looked at
+
+
+def test_parts_inside_a_usable_folder_are_checked(root):
+    shutil.rmtree(root / "labeltool_labels")
+
+    assert all(p.checked for p in check_readiness(root).parts)
+
+
 def test_dataset_path_that_is_a_file(tmp_path):
     file = tmp_path / "SeeingThroughFog.zip"
     file.write_bytes(b"PK")

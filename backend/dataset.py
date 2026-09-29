@@ -22,12 +22,12 @@ class RequiredPart:
     suffix: str
 
 
+CAMERA = RequiredPart("camera", "Tone-mapped left camera images (8-bit)", "cam_stereo_left_lut", ".png")
 REQUIRED_PARTS = [
-    RequiredPart("camera", "Tone-mapped left camera images (8-bit)", "cam_stereo_left_lut", ".png"),
+    CAMERA,
     RequiredPart("labels", "Ground-truth labels", "gt_labels/cam_left_labels_TMP", ".txt"),
     RequiredPart("metadata", "Environment metadata (weather, road, illumination)", "labeltool_labels", ".json"),
 ]
-CAMERA = REQUIRED_PARTS[0]
 
 # Everything else in the download. Skipping these saves most of the storage.
 NOT_NEEDED = [
@@ -45,6 +45,7 @@ class PartStatus:
     key: str
     name: str
     folder: str
+    checked: bool  # False when the dataset folder itself is unset or unusable
     present: bool
     message: str  # plain language, for the user
     detail: str  # what exactly was checked, for development
@@ -71,12 +72,12 @@ def check_readiness(root: Path | None) -> DatasetStatus:
             None,
             "No dataset folder is configured. Start the app with --dataset PATH or set "
             f"{DATASET_ENV_VAR}, then restart. Synthetic mode works without the dataset.",
-            "Not checked: no dataset folder configured.",
+            reason="no dataset folder configured",
         )
     if not root.exists():
-        return _unchecked(root, f"Dataset folder not found: {root}", "Not checked: dataset folder not found.")
+        return _unchecked(root, f"Dataset folder not found: {root}", reason="dataset folder not found")
     if not root.is_dir():
-        return _unchecked(root, f"The dataset path is not a folder: {root}", "Not checked: dataset path is not a folder.")
+        return _unchecked(root, f"The dataset path is not a folder: {root}", reason="dataset path is not a folder")
 
     parts = [_check_part(root, part) for part in REQUIRED_PARTS]
     missing = [p.name for p in parts if not p.present]
@@ -115,9 +116,14 @@ def _check_part(root: Path, part: RequiredPart) -> PartStatus:
 
 
 def _status(part: RequiredPart, present: bool, message: str, detail: str) -> PartStatus:
-    return PartStatus(part.key, part.name, part.folder, present, message, detail)
+    return PartStatus(part.key, part.name, part.folder, True, present, message, detail)
 
 
-def _unchecked(root: Path | None, message: str, part_message: str) -> DatasetStatus:
-    parts = [_status(part, False, part_message, message) for part in REQUIRED_PARTS]
+def _unchecked(root: Path | None, message: str, reason: str) -> DatasetStatus:
+    """Every part reported as not checked, because the dataset folder itself is unset or unusable."""
+    detail = f"Checked {root}: {reason}." if root else f"{DATASET_ENV_VAR} and --dataset are both unset."
+    parts = [
+        PartStatus(part.key, part.name, part.folder, False, False, f"Not checked: {reason}.", detail)
+        for part in REQUIRED_PARTS
+    ]
     return DatasetStatus(root is not None, None if root is None else str(root), False, message, parts, NOT_NEEDED)

@@ -38,7 +38,7 @@ Synthetic mode works without it. For Benchmark mode, download SeeingThroughFog f
 
    It prints PASS, FAIL or MISSING per archive and exits non-zero unless all pass.
 
-2. Extract only the three parts the app reads. Everything else (lidar, radar, gated, thermal, raw camera, road friction, weather station) can be skipped:
+2. Extraction has two stages. First join and unpack the split archive with `7z x SeeingThroughFogCompressed.zip` (7-Zip reads the `.z01`…`.z18` parts automatically). That gives one zip per sensor folder. Then extract only the three parts the app reads. Everything else (lidar, radar, gated, thermal, raw camera, road friction, weather station) can be skipped:
 
    | Part | Folder |
    | --- | --- |

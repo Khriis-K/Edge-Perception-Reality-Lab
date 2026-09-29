@@ -64,6 +64,8 @@ export interface components {
     schemas: {
         /** DatasetPartStatus */
         DatasetPartStatus: {
+            /** Checked */
+            checked: boolean;
             /** Detail */
             detail: string;
             /** Folder */

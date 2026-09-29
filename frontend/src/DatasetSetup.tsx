@@ -38,15 +38,15 @@ function Parts({ status }: { status: DatasetStatus }) {
   return (
     <ul aria-label="Required dataset parts" className="dataset-parts">
       {status.parts.map((part) => (
-        <PartRow key={part.key} part={part} checked={status.configured} />
+        <PartRow key={part.key} part={part} />
       ))}
     </ul>
   );
 }
 
-function PartRow({ part, checked }: { part: DatasetPartStatus; checked: boolean }) {
+function PartRow({ part }: { part: DatasetPartStatus }) {
   // The word carries the state; the icon and colour only reinforce it.
-  const state = part.present ? "Present" : checked ? "Missing" : "Not checked";
+  const state = part.present ? "Present" : part.checked ? "Missing" : "Not checked";
 
   return (
     <li className="dataset-part" data-present={part.present}>
