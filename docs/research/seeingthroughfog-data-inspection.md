@@ -79,6 +79,45 @@ twilight 2,128, malformed label line 2; the third zero-box frame was already exc
 At cap 300, RidableVehicle is the bottleneck in every adverse condition except snow-night. Per-class AP for bikes
 under fog and rain will be flagged as low n unless the cap goes up. Rain-day has only 68 usable frames in total.
 
+## Day/night: original vs refined (spot-check, 2026-09-29, for #9)
+
+The original and refined metadata disagree on day/night for 711 samples:
+
+| Original → refined | Not twilight | Twilight |
+| --- | --- | --- |
+| night → day | 388 | 260 |
+| day → night | 54 | 9 |
+
+Twilight samples are excluded from the conditions anyway, so only the 442 non-twilight disagreements move frames
+between conditions. All 648 night → day samples have `meta.illumination.overall_dark = false` in the original file,
+so the original contradicts its own darkness flag there.
+
+Spot-checked 12 non-twilight samples, drawn with `random.Random(9)`: 8 night → day and 4 day → night. The images
+were read one at a time from the split `cam_stereo_left_lut` archive over HTTP range requests (about 30 MB instead
+of 37.6 GB), and each was checked against its zip CRC.
+
+| Sample | Original | Refined | Seen |
+| --- | --- | --- | --- |
+| 2018-02-12_08-42-40_00300 | night | day | day: overcast, snow, buildings lit by daylight |
+| 2018-10-29_16-18-47_04600 | night | day | day: overcast, fog; some cars with headlights on |
+| 2018-10-29_16-38-10_00170 | night | day | day: dense fog, daylit |
+| 2018-10-29_16-38-10_00900 | night | day | day: dense fog, daylit |
+| 2018-10-29_16-42-03_00310 | night | day | day: fog, pedestrians in daylight |
+| 2018-12-10_09-51-03_00030 | night | day | day: snow, grey sky |
+| 2018-12-11_09-18-59_00900 | night | day | day: snowy forest road, grey sky |
+| 2018-12-11_09-18-59_04000 | night | day | day: snowy forest road, bus with headlights |
+| 2019-05-02_21-24-45_00930 | day | night | night: black sky, street lamps lit |
+| 2019-05-02_21-24-45_01710 | day | night | night: black sky, lit shop windows |
+| 2019-05-02_21-24-45_01800 | day | night | night: black sky, street lamps lit |
+| 2019-05-02_21-24-45_02070 | day | night | night: black sky, street lamps lit |
+
+**Result: the refined file is right in all 12.** The clock times in the ids agree: morning and afternoon for night →
+day, 21:24 in May for day → night. The adapter already reads the refined file, so nothing changes. Headlights
+switched on in fog and snow are a plausible cause of the original "night" labels.
+
+Caveat: the 12 frames come from 7 recordings, and 4 are from one drive (2019-05-02_21-24-45). This is strong
+evidence for these recordings, not a measured error rate for the refined file. No image was ambiguous.
+
 ## Fog chamber: not found in this release
 
 The paper (arXiv 1902.08913, §3.2) says 1.5k labelled chamber frames exist (day/night, visibility 30/40/50 m).
@@ -117,7 +156,5 @@ over HTTP range requests; nothing downloaded yet.
 
 - Whether the STF paper's 1.5k labelled chamber frames were ever published, and where.
 - Whether PixelAccurateBenchmark scenes are static enough to share hand-drawn boxes across conditions.
-- Which file is right for the 711 samples whose day/night differs between the original and refined metadata.
-  Needs the camera images: spot-check about 12 of them (#9).
 - How `DontCare` and the `*_is_group` classes enter the class mapping and ignore-region rule.
 - Checksums for the per-folder archives.
