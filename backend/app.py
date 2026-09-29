@@ -14,9 +14,11 @@ DEFAULT_STATIC_DIR = Path(__file__).resolve().parents[1] / "frontend" / "dist"
 VITE_DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
 
-def create_app(static_dir: Path = DEFAULT_STATIC_DIR, dev: bool = False) -> FastAPI:
+def create_app(static_dir: Path = DEFAULT_STATIC_DIR, dev: bool = False, dataset_root: Path | None = None) -> FastAPI:
     # No /docs or /redoc: they load Swagger UI and ReDoc from a CDN. /openapi.json stays.
     app = FastAPI(title="Edge Perception Reliability Lab", version="0.1.0", docs_url=None, redoc_url=None)
+    # Fixed for the app's lifetime: the browser never sends a filesystem path.
+    app.state.dataset_root = dataset_root.resolve() if dataset_root else None
     app.include_router(router)
 
     if dev:

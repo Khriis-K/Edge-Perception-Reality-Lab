@@ -26,6 +26,34 @@ npm run build
 
 (On macOS/Linux use `.venv/bin/python` and `.venv/bin/pip`.)
 
+## Connect the SeeingThroughFog dataset (optional)
+
+Synthetic mode works without it. For Benchmark mode, download SeeingThroughFog from its official source ([repository](https://github.com/princeton-computational-imaging/SeeingThroughFog); registration required) and keep it outside this repo.
+
+1. Verify the downloaded archives against the published checksums:
+
+   ```
+   .venv/Scripts/python.exe -m backend.checksums PATH/TO/ARCHIVES
+   ```
+
+   It prints PASS, FAIL or MISSING per archive and exits non-zero unless all pass.
+
+2. Extraction has two stages. First join and unpack the split archive with `7z x SeeingThroughFogCompressed.zip` (7-Zip reads the `.z01`…`.z18` parts automatically). That gives one zip per sensor folder. Then extract only the three parts the app reads. Everything else (lidar, radar, gated, thermal, raw camera, road friction, weather station) can be skipped:
+
+   | Part | Folder |
+   | --- | --- |
+   | 8-bit tone-mapped left camera images | `cam_stereo_left_lut` |
+   | Ground-truth labels (KITTI format) | `gt_labels/cam_left_labels_TMP` |
+   | Environment metadata (weather, road, illumination) | `labeltool_labels` (ships as a zip; extract it) |
+
+3. Start the app with the folder. It is set only at startup, never from the browser:
+
+   ```
+   .venv/Scripts/python.exe -m backend --dataset D:/data/SeeingThroughFog
+   ```
+
+   or set `EDGE_LAB_DATASET` (the flag wins if both are set). Setup shows each part as present or missing; use Re-check after extracting more.
+
 ## Develop
 
 Frontend with hot reload, in two terminals:
@@ -50,3 +78,5 @@ npm --prefix frontend run gen:api
 npm --prefix frontend exec -- playwright install chromium   # once
 npm --prefix frontend run check                       # API types are current, then browser + axe tests
 ```
+
+Tests never use the real dataset. They generate a small stand-in with `scripts/make_fixture_dataset.py` (the e2e run writes it to `frontend/.e2e-dataset/`).
