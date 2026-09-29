@@ -38,8 +38,23 @@ Checked in the labelled release:
 
 Conclusion: the 1.5k labelled chamber frames are not in this download. They are most likely a separate release.
 
+## Fog-chamber candidate: PixelAccurateBenchmark
+
+A separate dataset on the same download site (`PixelAccurateBenchmark/`). Inspected by reading the zip indexes
+over HTTP range requests; nothing downloaded yet.
+
+- One 26 GB zip of 14 inner zips: `rgb_left_8bit` (3.1 GB), `rgb_right_8bit`, `gated*_10bit`, `lidar_hdl64_*`,
+  `intermetric_*`, `sgm`, `psmnet`, `monodepth`, `sparse2dense`, `calibration`. **No 2D box labels.**
+- `rgb_left_8bit`: 1,600 PNGs named `scene{1-4}_{day,night}_{condition}_{0-9}.png`. Conditions: `clear`,
+  `fog20` … `fog100` in 5 m steps, `rain15`, `rain55`. 10 frames per scene, light and condition.
+- Filenames carry the fog density, and every scene has a clear reference, so real chamber fog can be compared
+  with synthetic fog at the same visibility on the same scene.
+- Not yet checked: whether scenes are static across conditions (camera and objects unmoved), which would let one
+  set of hand-drawn boxes per scene and light serve all its frames.
+
 ## Open questions
 
-- Where the fog-chamber release is published, and whether it has 2D labels in the same KITTI format.
+- Whether the STF paper's 1.5k labelled chamber frames were ever published, and where.
+- Whether PixelAccurateBenchmark scenes are static enough to share hand-drawn boxes across conditions.
 - Which metadata the adapter should read: original or refined.
 - Checksums for the per-folder archives.
