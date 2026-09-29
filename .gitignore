@@ -22,7 +22,7 @@ frontend/playwright-report/
 frontend/.e2e-dataset/
 
 # Personal dataset download links (registration-gated, may be signed)
-dataset-links.json
+/datasets/
 
 # Full-length source footage; only the short cut clips in samples/ are committed
 samples/*.webm
