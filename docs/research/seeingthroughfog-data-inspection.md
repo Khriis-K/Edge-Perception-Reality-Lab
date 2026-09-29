@@ -24,6 +24,61 @@ yes.snow.{heavySnow,lightSnow}}`, `roadState.*`, `sidewalkState.*`, `infrastruct
 `tunnel`, `twilight`, `daytime.{day,night}`, `point_removed`. Fog and precipitation are separate axes here, so a
 sample can be foggy and snowy at once. `daytime` differs from the original in 711 samples. No fog-chamber key.
 
+## Mixed fog and precipitation (2026-09-29, for #9)
+
+Counted over all 12,997 refined files before committing to excluding fog plus rain or snow:
+
+| Refined flags | Not twilight | Including twilight |
+| --- | --- | --- |
+| Fog, no precipitation | 1,353 | 1,360 |
+| Fog + snow | 1,549 | 1,894 |
+| Fog + rain | 0 | 0 |
+| Mixed share of all fog | 53% | 58% |
+
+- The mixed samples are all fog with snow; there is no fog with rain.
+- Mixed fog is mostly light fog. Light fog is 258 fog-only samples against 1,409 with snow. Dense fog is 1,095
+  fog-only against 140 with snow.
+- The flags are clean. No sample contradicts its `no` flag, none has rain and snow together, and every sample has
+  exactly one of `daytime.day` / `daytime.night`. 2,128 samples (16%) are `twilight`.
+
+**Decision: exclude them anyway.** The share is large, but 1,353 fog-only frames remain (about 1,134 by day and 219
+by night), which is enough for a cap of a few hundred per condition. Precedence rules were considered and rejected:
+counting fog + snow as fog puts snowfall into the fog condition, and counting it as snow puts fog into snow. Either
+way, one condition would measure two effects.
+
+**Consequence to report:** the fog condition is about 81% dense fog, so light fog is under-represented. Fog-night
+(219 frames) falls short of a 300 cap. The mapping is in `backend/conditions.py`.
+
+## Labels (`gt_labels/cam_left_labels_TMP`)
+
+- 12,997 files, and every non-empty line has 27 fields. 64 files are empty (samples with no labelled objects).
+- Three lines have an all-zero 2D box (`2018-02-07_18-05-09_00000` line 1, `2018-02-07_18-25-17_00170` line 7,
+  `2018-12-10_08-55-01_00600` line 8). The adapter treats these as malformed and excludes the frame.
+- Classes beyond the six in the spec: `DontCare` (5,295), `Pedestrian_is_group` (1,134), `PassengerCar_is_group`
+  (238), a few other `*_is_group`, `person` (3) and `train` (1). Only the four main classes are counted as objects
+  in the Subset table. How the class mapping and ignore regions treat the rest is still open.
+- Reading every refined metadata and label file took 300–340 s, even on a second pass. The app builds the index once
+  per run and caches it in memory.
+
+## The default subset on the real data (seed 0, cap 300)
+
+`index_dataset` on the real refined metadata and labels: 9,318 usable samples, 3,679 excluded (fog with snow 1,549,
+twilight 2,128, malformed label line 2; the third zero-box frame was already excluded for another reason).
+
+| Condition | Usable | In subset | Objects | Rarest class | Low n (< 30) |
+| --- | --- | --- | --- | --- | --- |
+| clear-day | 3,011 | 300 | 2,946 | RidableVehicle 107 | |
+| clear-night | 2,496 | 300 | 2,297 | LargeVehicle 76 | |
+| fog-day | 1,134 | 300 | 1,092 | RidableVehicle 7 | low n |
+| fog-night | 219 | 219 | 829 | RidableVehicle 14 | low n |
+| snow-day | 1,237 | 300 | 2,041 | RidableVehicle 16 | low n |
+| snow-night | 989 | 300 | 2,045 | RidableVehicle 63 | |
+| rain-day | 68 | 68 | 333 | RidableVehicle 8 | low n |
+| rain-night | 164 | 164 | 1,963 | RidableVehicle 28 | low n |
+
+At cap 300, RidableVehicle is the bottleneck in every adverse condition except snow-night. Per-class AP for bikes
+under fog and rain will be flagged as low n unless the cap goes up. Rain-day has only 68 usable frames in total.
+
 ## Fog chamber: not found in this release
 
 The paper (arXiv 1902.08913, §3.2) says 1.5k labelled chamber frames exist (day/night, visibility 30/40/50 m).
@@ -62,5 +117,7 @@ over HTTP range requests; nothing downloaded yet.
 
 - Whether the STF paper's 1.5k labelled chamber frames were ever published, and where.
 - Whether PixelAccurateBenchmark scenes are static enough to share hand-drawn boxes across conditions.
-- Which metadata the adapter should read: original or refined.
+- Which file is right for the 711 samples whose day/night differs between the original and refined metadata.
+  Needs the camera images: spot-check about 12 of them (#9).
+- How `DontCare` and the `*_is_group` classes enter the class mapping and ignore-region rule.
 - Checksums for the per-folder archives.

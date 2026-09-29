@@ -6,10 +6,11 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from backend.dataset import FrameNotFound, camera_image, check_readiness
+from backend.dataset import DatasetIndex, FrameNotFound, camera_image, check_readiness, index_dataset
 from backend.degradations import KINDS, RANDOMIZED, TITLES, DegradationKind, parameters
 from backend.jobs import DegradationSettings, Experiment, FrameVariant, Job, JobManager, JobStatus, NoDetector
 from backend.samples import SAMPLES
+from backend.subset import DEFAULT_CAP, DEFAULT_SEED, LOW_N_OBJECTS, ConditionSummary, Manifest, draw_subset, summarize
 
 router = APIRouter(prefix="/api")
 
@@ -111,6 +112,15 @@ class DatasetStatusResponse(BaseModel):
     not_needed: list[str]
 
 
+class SubsetResponse(BaseModel):
+    manifest: Manifest
+    conditions: list[ConditionSummary]
+    excluded_total: int
+    excluded: dict[str, int]  # reason -> samples, over the whole dataset
+    problems: list[str]
+    low_n_objects: int  # a condition whose rarest class has fewer objects is flagged low n
+
+
 @router.get("/health")
 def health() -> HealthResponse:
     return HealthResponse(status="ok")
@@ -198,3 +208,34 @@ def dataset_frame(sample_id: str, request: Request) -> FileResponse:
         return FileResponse(camera_image(request.app.state.dataset_root, sample_id), media_type="image/png")
     except FrameNotFound as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
+
+
+@router.get("/dataset/subset", responses={409: {"description": "The dataset is not configured or not ready"}})
+def dataset_subset(
+    request: Request,
+    seed: Annotated[int, Query(ge=0)] = DEFAULT_SEED,
+    cap: Annotated[int, Query(ge=1, le=100_000)] = DEFAULT_CAP,
+) -> SubsetResponse:
+    """The seeded per-condition subset: its manifest and the counts for the Subset table."""
+    index = _dataset_index(request)
+    manifest = draw_subset(index.frames, seed, cap)
+    return SubsetResponse(
+        manifest=manifest,
+        conditions=summarize(index.frames, manifest),
+        excluded_total=sum(index.excluded.values()),
+        excluded=index.excluded,
+        problems=index.problems,
+        low_n_objects=LOW_N_OBJECTS,
+    )
+
+
+def _dataset_index(request: Request) -> DatasetIndex:
+    """The dataset's index, built once per app. The lock stops two first requests from both reading everything."""
+    state = request.app.state
+    with state.dataset_index_lock:
+        if state.dataset_index is None:
+            status = check_readiness(state.dataset_root)
+            if not status.ready:
+                raise HTTPException(status_code=409, detail=status.message)
+            state.dataset_index = index_dataset(state.dataset_root)
+        return state.dataset_index

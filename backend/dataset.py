@@ -1,12 +1,19 @@
-"""SeeingThroughFog dataset adapter: which parts are present, and where a sample's camera image lives.
+"""SeeingThroughFog dataset adapter: which parts are present, where a sample's camera image lives, and which
+condition each sample belongs to.
 
 The dataset folder is fixed at startup. Nothing here takes a path from the browser: frames are looked up by
 sample id, and an id must match the dataset's naming scheme, so it can never name a file outside the folder.
 """
 
+import json
 import re
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
+
+from backend.conditions import Excluded, assign_condition
+from backend.labels import MAIN_CLASSES, parse_labels
+from backend.subset import Frame
 
 DATASET_ENV_VAR = "EDGE_LAB_DATASET"
 
@@ -23,11 +30,17 @@ class RequiredPart:
 
 
 CAMERA = RequiredPart("camera", "Tone-mapped left camera images (8-bit)", "cam_stereo_left_lut", ".png")
-REQUIRED_PARTS = [
-    CAMERA,
-    RequiredPart("labels", "Ground-truth labels", "gt_labels/cam_left_labels_TMP", ".txt"),
-    RequiredPart("metadata", "Environment metadata (weather, road, illumination)", "labeltool_labels", ".json"),
-]
+LABELS = RequiredPart("labels", "Ground-truth labels", "gt_labels/cam_left_labels_TMP", ".txt")
+# The refined metadata, not the original labeltool_labels: see backend/conditions.py.
+METADATA = RequiredPart(
+    "metadata", "Environment metadata, refined (fog, precipitation, daytime)", "labeltool_labels_refined", ".json"
+)
+REQUIRED_PARTS = [CAMERA, LABELS, METADATA]
+
+NO_LABEL_FILE = "no label file"
+MALFORMED_LABELS = "malformed label line"
+METADATA_UNREADABLE = "metadata unreadable"
+LABELS_UNREADABLE = "label file unreadable"
 
 # Everything else in the download. Skipping these saves most of the storage.
 NOT_NEEDED = [
@@ -59,6 +72,13 @@ class DatasetStatus:
     message: str
     parts: list[PartStatus]
     not_needed: list[str]
+
+
+@dataclass(frozen=True)
+class DatasetIndex:
+    frames: list[Frame]  # usable samples, each with a determined condition
+    excluded: dict[str, int]  # reason -> number of samples
+    problems: list[str]  # located messages for unreadable files and malformed label lines
 
 
 class FrameNotFound(LookupError):
@@ -95,6 +115,49 @@ def camera_image(root: Path | None, sample_id: str) -> Path:
     if not image.is_file():
         raise FrameNotFound(f"No camera image for sample {sample_id} in the dataset.")
     return image
+
+
+def index_dataset(root: Path) -> DatasetIndex:
+    """Every sample's condition and main-class object counts. Reads every metadata and label file, so it is slow on
+    the real dataset (minutes on a cold disk): callers should build it once."""
+    frames, excluded, problems = [], Counter(), []
+    for meta_file in sorted((root / METADATA.folder).glob(f"*{METADATA.suffix}")):
+        sample_id = meta_file.stem
+        if not SAMPLE_ID.fullmatch(sample_id):
+            continue
+        result = _index_sample(root, meta_file)
+        if isinstance(result, Frame):
+            frames.append(result)
+        else:
+            reason, messages = result
+            excluded[reason] += 1
+            problems.extend(messages)
+    return DatasetIndex(frames, dict(excluded), problems)
+
+
+def _index_sample(root: Path, meta_file: Path) -> Frame | tuple[str, list[str]]:
+    """The sample's Frame, or why it is excluded plus any located problem messages."""
+    try:
+        meta = json.loads(meta_file.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        return METADATA_UNREADABLE, [f"{meta_file.name}: {error}"]
+    condition = assign_condition(meta)
+    if isinstance(condition, Excluded):
+        return condition.reason, []
+
+    label_file = root / LABELS.folder / f"{meta_file.stem}{LABELS.suffix}"
+    try:
+        boxes, bad_lines = parse_labels(label_file.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return NO_LABEL_FILE, []
+    except (OSError, UnicodeDecodeError) as error:
+        return LABELS_UNREADABLE, [f"{label_file.name}: {error}"]
+    if bad_lines:
+        # The whole frame goes: a silently dropped ground-truth box would turn a correct detection into a false alarm.
+        return MALFORMED_LABELS, [f"{label_file.name} {p.message}" for p in bad_lines]
+
+    counts = Counter(b.label for b in boxes if b.label in MAIN_CLASSES)
+    return Frame(meta_file.stem, condition, dict(counts))
 
 
 def _check_part(root: Path, part: RequiredPart) -> PartStatus:

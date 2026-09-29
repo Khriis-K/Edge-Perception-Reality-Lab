@@ -1,5 +1,6 @@
 import { Button, Icon } from "@blueprintjs/core";
 import type { DatasetPartStatus, DatasetStatus } from "./api/client";
+import { SubsetTable } from "./SubsetTable";
 import { useDatasetStatus } from "./useDatasetStatus";
 
 /**
@@ -29,6 +30,7 @@ export function DatasetSetup() {
       </p>
 
       {status && <Parts status={status} />}
+      <SubsetTable ready={status?.ready ?? false} />
       {status && <NotNeeded items={status.not_needed} />}
     </section>
   );

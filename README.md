@@ -52,7 +52,9 @@ Synthetic mode works without it. For Benchmark mode, download SeeingThroughFog f
    | --- | --- |
    | 8-bit tone-mapped left camera images | `cam_stereo_left_lut` |
    | Ground-truth labels (KITTI format) | `gt_labels/cam_left_labels_TMP` |
-   | Environment metadata (weather, road, illumination) | `labeltool_labels` (ships as a zip; extract it) |
+   | Refined environment metadata (fog, precipitation, daytime) | `labeltool_labels_refined` (ships as a zip; extract it) |
+
+   The original `labeltool_labels` isn't needed; the app reads the refined metadata.
 
 3. Start the app with the folder. It is set only at startup, never from the browser:
 
@@ -61,6 +63,14 @@ Synthetic mode works without it. For Benchmark mode, download SeeingThroughFog f
    ```
 
    or set `EDGE_LAB_DATASET` (the flag wins if both are set). Setup shows each part as present or missing; use Re-check after extracting more.
+
+### Conditions and the subset
+
+Each sample is assigned one of eight evaluation conditions: clear, fog, snow and rain, each split into day and night. Samples whose condition can't be determined are excluded and counted. That covers fog with rain or snow, twilight, and frames with a malformed label line. The full mapping, and why each exclusion exists, is in [`backend/conditions.py`](backend/conditions.py). The data behind it is in [`docs/research/seeingthroughfog-data-inspection.md`](docs/research/seeingthroughfog-data-inspection.md).
+
+Setup's Subset table draws up to a cap of frames per condition (default 300) with a seed (default 0). It shows frames, objects and the rarest class per condition, and tags a condition **low n** when its rarest class has fewer than 30 objects. The same seed, cap and dataset always give the same subset. **Download manifest** saves the seed, cap, condition vocabulary version and frame ids as JSON, which you can commit so others can reproduce the subset.
+
+The first time the table loads, the app reads every label and metadata file. That can take a few minutes on the full dataset; after that it is cached until the app restarts.
 
 ## Develop
 

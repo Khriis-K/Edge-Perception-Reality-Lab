@@ -1,10 +1,11 @@
-"""Dataset adapter: readiness checks and frame lookup, exercised against the generated fixture only."""
+"""Dataset adapter: readiness checks, frame lookup and the condition index, exercised against the generated fixture only."""
 
 import shutil
 
 import pytest
 
-from backend.dataset import FrameNotFound, camera_image, check_readiness
+from backend.conditions import CONDITIONS
+from backend.dataset import FrameNotFound, camera_image, check_readiness, index_dataset
 from scripts.make_fixture_dataset import build_fixture_dataset
 
 
@@ -41,7 +42,7 @@ def test_present_parts_report_how_many_files_were_found(root):
     [
         ("camera", "cam_stereo_left_lut", "camera images"),
         ("labels", "gt_labels/cam_left_labels_TMP", "labels"),
-        ("metadata", "labeltool_labels", "metadata"),
+        ("metadata", "labeltool_labels_refined", "metadata"),
     ],
 )
 def test_missing_part_is_named_in_plain_language(root, key, folder, words):
@@ -79,13 +80,13 @@ def test_files_of_the_wrong_type_do_not_count(root):
 
 
 def test_metadata_left_zipped_says_to_extract_it(root):
-    shutil.rmtree(root / "labeltool_labels")
-    (root / "labeltool_labels.zip").write_bytes(b"PK")
+    shutil.rmtree(root / "labeltool_labels_refined")
+    (root / "labeltool_labels_refined.zip").write_bytes(b"PK")
 
     metadata = part(check_readiness(root), "metadata")
 
     assert not metadata.present
-    assert "labeltool_labels.zip" in metadata.message
+    assert "labeltool_labels_refined.zip" in metadata.message
     assert "extract" in metadata.message.lower()
 
 
@@ -111,7 +112,7 @@ def test_parts_are_not_checked_when_the_folder_is_unusable(tmp_path):
 
 
 def test_parts_inside_a_usable_folder_are_checked(root):
-    shutil.rmtree(root / "labeltool_labels")
+    shutil.rmtree(root / "labeltool_labels_refined")
 
     assert all(p.checked for p in check_readiness(root).parts)
 
@@ -175,3 +176,69 @@ def test_camera_image_rejects_unknown_sample(root):
 def test_camera_image_without_dataset():
     with pytest.raises(FrameNotFound):
         camera_image(None, "2018-02-12_15-39-23_00100")
+
+
+# --- index: conditions, objects and exclusions ------------------------------------
+
+
+def frame(index, sample_id):
+    return next(f for f in index.frames if f.id == sample_id)
+
+
+def test_index_gives_every_condition_one_fixture_frame(root):
+    index = index_dataset(root)
+
+    assert sorted(f.condition for f in index.frames) == sorted(CONDITIONS)
+
+
+def test_index_excludes_and_counts_the_undeterminable_samples(root):
+    index = index_dataset(root)
+
+    assert index.excluded == {"fog with rain or snow": 1, "twilight": 1, "malformed label line": 1}
+
+
+def test_malformed_label_line_is_reported_with_its_file_and_line(root):
+    [problem] = index_dataset(root).problems
+
+    assert "2018-02-08_10-00-00_00600.txt" in problem
+    assert "line 2" in problem
+
+
+def test_index_counts_main_class_objects_only(root):
+    index = index_dataset(root)
+
+    assert frame(index, "2018-02-03_10-00-00_00100").class_counts == {"PassengerCar": 1, "Pedestrian": 1}
+    # Vehicle is a fallback class (an ignore region), not an object to score.
+    assert frame(index, "2018-02-04_10-00-00_00200").class_counts == {"RidableVehicle": 1}
+
+
+def test_a_sample_with_an_empty_label_file_is_kept_with_no_objects(root):
+    (root / "gt_labels" / "cam_left_labels_TMP" / "2018-02-03_10-00-00_00100.txt").write_text("")
+
+    assert frame(index_dataset(root), "2018-02-03_10-00-00_00100").class_counts == {}
+
+
+def test_a_sample_without_a_label_file_is_excluded(root):
+    (root / "gt_labels" / "cam_left_labels_TMP" / "2018-02-03_10-00-00_00100.txt").unlink()
+
+    index = index_dataset(root)
+
+    assert "2018-02-03_10-00-00_00100" not in {f.id for f in index.frames}
+    assert index.excluded["no label file"] == 1
+
+
+def test_unreadable_metadata_is_excluded_and_located(root):
+    (root / "labeltool_labels_refined" / "2018-02-03_10-00-00_00100.json").write_text("{not json")
+
+    index = index_dataset(root)
+
+    assert index.excluded["metadata unreadable"] == 1
+    assert any("2018-02-03_10-00-00_00100.json" in p for p in index.problems)
+
+
+def test_files_that_are_not_samples_are_ignored(root):
+    (root / "labeltool_labels_refined" / "notes.json").write_text("{}")
+
+    index = index_dataset(root)
+
+    assert len(index.frames) == 8 and sum(index.excluded.values()) == 3

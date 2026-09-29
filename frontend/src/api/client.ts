@@ -11,6 +11,9 @@ export type DegradationKind = DegradationSettings["kind"];
 export type FrameVariant = "clean" | "degraded";
 export type DatasetStatus = components["schemas"]["DatasetStatusResponse"];
 export type DatasetPartStatus = components["schemas"]["DatasetPartStatus"];
+export type Subset = components["schemas"]["SubsetResponse"];
+export type ConditionSummary = components["schemas"]["ConditionSummary"];
+export type Manifest = components["schemas"]["Manifest"];
 
 // Empty in production: the backend serves this page, so the API is same-origin.
 const API_BASE: string = import.meta.env.VITE_API_BASE ?? "";
@@ -40,6 +43,11 @@ export function fetchHealth(signal: AbortSignal): Promise<HealthResponse> {
 /** Re-checks the dataset folder the backend was started with. The browser never sends a path. */
 export function fetchDatasetStatus(signal: AbortSignal): Promise<DatasetStatus> {
   return request("/api/dataset/status", { signal });
+}
+
+/** The seeded per-condition subset of the dataset: its manifest and the Subset table's counts. */
+export function fetchSubset(seed: number, cap: number, signal: AbortSignal): Promise<Subset> {
+  return request(`/api/dataset/subset?seed=${seed}&cap=${cap}`, { signal });
 }
 
 export function fetchSamples(): Promise<SampleVideo[]> {
