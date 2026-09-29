@@ -5,7 +5,8 @@ import { isActive, useCurrentJob } from "./CurrentJob";
 import type { Section } from "./sections";
 import { useServerHealth } from "./useServerHealth";
 
-export function TopBar({ section }: { section: Section }) {
+/** `onOpenInspector` is given only while the inspector is a drawer; it shows the toggle that opens it. */
+export function TopBar({ section, onOpenInspector }: { section: Section; onOpenInspector?: () => void }) {
   const navigate = useNavigate();
 
   return (
@@ -29,6 +30,12 @@ export function TopBar({ section }: { section: Section }) {
           <kbd>Ctrl K</kbd>
         </button>
         <ServerStatus />
+        {onOpenInspector && (
+          <button type="button" className="inspector-toggle" aria-haspopup="dialog" onClick={onOpenInspector}>
+            <Icon icon="panel-stats" size={14} aria-hidden />
+            Inspector
+          </button>
+        )}
         {/* Stub: the Report section holds the real export action. */}
         <button type="button" className="primary-action" onClick={() => navigate("/report")}>
           Export report
