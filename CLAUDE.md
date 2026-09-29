@@ -60,7 +60,7 @@ When writing or modifying code, follow these principles:
 
 ## Environment
 
-- **Python**: Always use `.venv/Scripts/python.exe` — never the global `python` / `python3`. The venv has CUDA PyTorch and project-specific deps. The global Python may be a different version or missing GPU support.
+- **Python**: Always use `.venv/Scripts/python.exe` — never the global `python` / `python3`. The venv has the project's deps (installed from `pyproject.toml`). The global Python may be a different version or missing them.
 - **pip**: Always use `.venv/Scripts/pip.exe` for the same reason.
 - **Shell**: Prefer PowerShell for Windows-native commands (venv activation, file ops). Use Bash for POSIX scripts only. When using Bash, run Python via `.venv/Scripts/python.exe` (forward slashes ok).
 - **Prefer monitors over polling** — for long-running commands (training, builds, tests), use the Monitor tool instead of polling loops. Monitors stream events as they happen and don't burn context re-checking.
