@@ -44,6 +44,16 @@ p {
   height: 100%;
 }
 
+/* Below desktop width the inspector is a drawer (see Workbench.tsx), so the work area takes its column. */
+@media (width < 1280px) {
+  .workbench {
+    grid-template-columns: 52px 250px minmax(0, 1fr);
+    grid-template-areas:
+      "top top top"
+      "rail explorer work";
+  }
+}
+
 /* --- top bar -------------------------------------------------------------- */
 
 .top-bar {
@@ -133,6 +143,24 @@ p {
 .server-status[data-health="disconnected"] {
   color: var(--warn);
   border-color: var(--warn);
+}
+
+.inspector-toggle {
+  height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--raised);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.inspector-toggle:hover {
+  border-color: var(--muted);
 }
 
 .primary-action {
@@ -237,6 +265,29 @@ p {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+/* .bp6-dark prefix outranks Blueprint's dark drawer background. */
+.bp6-dark .inspector-drawer {
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+}
+
+.inspector-drawer [role="dialog"] {
+  height: 100%;
+  outline: none;
+}
+
+.inspector-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 6px;
+  padding-bottom: 4px;
+}
+
+.inspector-drawer-header h2 {
+  font: inherit;
 }
 
 .empty-state {
