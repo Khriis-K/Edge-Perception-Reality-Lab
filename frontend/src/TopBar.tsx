@@ -1,6 +1,7 @@
 import { Icon } from "@blueprintjs/core";
 import { useNavigate } from "react-router";
 import { apiHost } from "./api/client";
+import { isActive, useCurrentJob } from "./CurrentJob";
 import type { Section } from "./sections";
 import { useServerHealth } from "./useServerHealth";
 
@@ -21,7 +22,7 @@ export function TopBar({ section }: { section: Section }) {
       </nav>
 
       <div className="top-bar-actions">
-        {/* Job-progress pill goes here; hidden until a job is running (job dock ticket). */}
+        <JobPill />
         {/* Placeholder until the command palette ticket. */}
         <button type="button" className="command-search" disabled>
           <span>Search frames, runs, commands</span>
@@ -45,6 +46,26 @@ function ServerStatus() {
     <span role="status" className="server-status" data-health={health} title="Local backend server">
       <span aria-hidden>● </span>
       {label}
+    </span>
+  );
+}
+
+/** The running job's mode and percent complete; hidden when nothing is running. */
+function JobPill() {
+  const { job } = useCurrentJob();
+  if (!isActive(job)) return null;
+  const percent = Math.round(job.progress * 100);
+
+  return (
+    <span
+      role="progressbar"
+      aria-label="Job progress"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={percent}
+      className="job-pill"
+    >
+      <span className="job-pill-mode">{job.mode}</span> {percent}%
     </span>
   );
 }

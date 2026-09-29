@@ -7,16 +7,28 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse
 
 from backend.api import router
+from backend.detection import ModelRunner
+from backend.jobs import JobManager
 
-DEFAULT_STATIC_DIR = Path(__file__).resolve().parents[1] / "frontend" / "dist"
+REPO = Path(__file__).resolve().parents[1]
+DEFAULT_STATIC_DIR = REPO / "frontend" / "dist"
+# Derived frames for local use only; safe to delete.
+DEFAULT_CACHE_DIR = REPO / "cache"
 
 # Only the local Vite dev server may call the API cross-origin, and only in dev mode.
 VITE_DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
 
-def create_app(static_dir: Path = DEFAULT_STATIC_DIR, dev: bool = False) -> FastAPI:
+def create_app(
+    static_dir: Path = DEFAULT_STATIC_DIR,
+    dev: bool = False,
+    runner: ModelRunner | None = None,
+    cache_dir: Path = DEFAULT_CACHE_DIR,
+) -> FastAPI:
+    """`runner` is the detector; None means no weights are installed, and runs are refused."""
     # No /docs or /redoc: they load Swagger UI and ReDoc from a CDN. /openapi.json stays.
     app = FastAPI(title="Edge Perception Reliability Lab", version="0.1.0", docs_url=None, redoc_url=None)
+    app.state.jobs = JobManager(runner, cache_dir)
     app.include_router(router)
 
     if dev:

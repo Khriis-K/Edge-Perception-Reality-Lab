@@ -7,7 +7,8 @@ can fix the implementation.
 
 Source-to-test mapping:
     Python:     scripts/X.py  ->  tests/test_X.py
-    TypeScript: dir/X.ts      ->  dir/__tests__/X.test.ts, else X.test.ts (co-located)
+    TypeScript: dir/X.ts      ->  dir/__tests__/X.test.ts, else X.test.ts (co-located),
+                run with the frontend's vitest
 
 Exit codes:
     0 — tests passed or no associated test found
@@ -36,13 +37,13 @@ MAPPINGS = [
     {
         "source_pattern": r"^(?P<dir>(?:.+/)?)(?P<name>[^/]+)\.(?P<ext>tsx?)$",
         "test_template": "{dir}__tests__/{name}.test.{ext}",
-        "runner": "jest",
+        "runner": "vitest",
     },
-    # TypeScript: co-located X.ts -> X.test.ts (app/api/)
+    # TypeScript: co-located X.ts -> X.test.ts
     {
         "source_pattern": r"^(?P<name>.+)\.(?P<ext>tsx?)$",
         "test_template": "{name}.test.{ext}",
-        "runner": "jest",
+        "runner": "vitest",
     },
 ]
 
@@ -90,18 +91,19 @@ def _is_test_file(path: str) -> bool:
 
 def run_tests(test_path: str, runner: str) -> tuple[bool, str]:
     """Run tests and return (success, output)."""
+    cwd = None
     if runner == "pytest":
         cmd = [VENV_PYTHON, "-m", "pytest", test_path, "-v", "--tb=short"]
-    elif runner == "jest":
+    elif runner == "vitest":
         # shutil.which finds npx.cmd on Windows; a bare "npx" fails without a shell.
-        # --runTestsByPath stops jest treating the path as a regex that also
-        # matches copies under .claude/worktrees/.
-        cmd = [shutil.which("npx"), "jest", "--runTestsByPath", test_path, "--no-coverage"]
+        # vitest runs from frontend/, where its config and node_modules live.
+        cmd = [shutil.which("npx"), "vitest", "run", test_path.removeprefix("frontend/")]
+        cwd = "frontend"
     else:
         return True, f"Unknown runner: {runner}"
 
     result = subprocess.run(
-        cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
+        cmd, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
     output = result.stdout + result.stderr
     return result.returncode == 0, output
