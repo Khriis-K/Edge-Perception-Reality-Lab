@@ -16,6 +16,12 @@ class Sample:
 SAMPLES = {
     sample.id: sample
     for sample in [
+        # First, so the Synthetic screen opens on real footage the detector finds objects in.
+        Sample(
+            id="krakow-city-driving",
+            title="City driving, Kraków (CC BY 3.0)",
+            path=SAMPLES_DIR / "krakow_city_driving.mp4",
+        ),
         Sample(
             id="synthetic-traffic",
             title="Synthetic traffic (generated)",

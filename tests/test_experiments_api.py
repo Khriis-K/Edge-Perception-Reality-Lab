@@ -88,9 +88,11 @@ def run_to_completion(client):
 def test_samples_list_the_bundled_video_by_id_without_a_path(client):
     samples = client.get("/api/samples").json()
 
-    assert [s["id"] for s in samples] == [SAMPLE]
-    assert "path" not in samples[0]
-    assert samples[0]["title"]
+    # The real clip comes first: the Synthetic screen preselects the first sample.
+    assert [s["id"] for s in samples] == ["krakow-city-driving", SAMPLE]
+    for sample in samples:
+        assert "path" not in sample
+        assert sample["title"]
 
 
 # --- start -> progress -> complete --------------------------------------------------
