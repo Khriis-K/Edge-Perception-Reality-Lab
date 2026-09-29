@@ -10,7 +10,9 @@ const detections = (page: Page) => viewer(page).getByRole("list", { name: /Detec
 
 async function startRun(page: Page) {
   await page.goto("/synthetic");
-  await expect(page.getByLabel("Sample video")).toHaveValue("synthetic-traffic");
+  // The real clip is preselected; these tests rely on the stub's fixed boxes on the synthetic one.
+  await expect(page.getByLabel("Sample video")).toHaveValue("krakow-city-driving");
+  await page.getByLabel("Sample video").selectOption("synthetic-traffic");
   await page.getByRole("button", { name: "Start run" }).click();
 }
 

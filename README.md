@@ -14,7 +14,10 @@ Then open http://127.0.0.1:8000. Use `--port` to change the port.
 
 The detector is YOLOX-Nano (Apache-2.0), pretrained on COCO, run on the CPU through ONNX Runtime. Without its weights the app still starts, but runs are refused with a message saying how to fetch them. `--runner stub` swaps in a deterministic stand-in detector (the browser tests use it).
 
-The bundled sample video is synthetic: a bright block driving across a dark road. The stub "detects" it; the real detector finds nothing in it, because it isn't a real scene. A real sample clip is still to come.
+Two sample videos are bundled:
+
+- **City driving, KrakÃ³w** (the default): 20 seconds of real dashcam footage with cars and pedestrians. It's an excerpt of a video by Relaxing Roads 4K, under CC BY 3.0 (see [samples/CREDITS.md](samples/CREDITS.md)).
+- **Synthetic traffic**: a bright block driving across a dark road. The stub "detects" it; the real detector finds nothing in it, because it isn't a real scene. It exists as the test fixture.
 
 ### First-time setup
 
@@ -43,7 +46,7 @@ Synthetic mode works without it. For Benchmark mode, download SeeingThroughFog f
 
    It prints PASS, FAIL or MISSING per archive and exits non-zero unless all pass.
 
-2. Extraction has two stages. First join and unpack the split archive with `7z x SeeingThroughFogCompressed.zip` (7-Zip reads the `.z01`…`.z18` parts automatically). That gives one zip per sensor folder. Then extract only the three parts the app reads. Everything else (lidar, radar, gated, thermal, raw camera, road friction, weather station) can be skipped:
+2. Extraction has two stages. First join and unpack the split archive with `7z x SeeingThroughFogCompressed.zip` (7-Zip reads the `.z01`ï¿½`.z18` parts automatically). That gives one zip per sensor folder. Then extract only the three parts the app reads. Everything else (lidar, radar, gated, thermal, raw camera, road friction, weather station) can be skipped:
 
    | Part | Folder |
    | --- | --- |
