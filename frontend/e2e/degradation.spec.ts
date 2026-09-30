@@ -118,6 +118,26 @@ test("every box in both panes carries a text label", async ({ page }) => {
   }
 });
 
+test("metrics counted over too few detections are labelled low n", async ({ page }) => {
+  // Darkness 0.5 dims the stub's bright car below what it detects: 96 clean detections, 0 degraded.
+  await page.goto("/synthetic");
+  await settings(page).getByLabel("Type").selectOption("darkness");
+  await settings(page).getByLabel("Severity").fill("0.5");
+  await runOnSyntheticSample(page);
+
+  const metrics = inspector(page).getByRole("region", { name: "Stability" });
+  const metric = (name: string) =>
+    metrics.getByLabel("Clip stability").locator("div").filter({ has: page.getByText(name, { exact: true }) });
+  await expect(metric("Retention rate")).toContainText("0 / 96 clean detections");
+  await expect(metric("Retention rate")).not.toContainText("low n");
+  await expect(metric("Class changes")).toContainText("of 96 clean detections");
+  await expect(metric("Class changes")).not.toContainText("low n");
+  await expect(metric("Introduced rate")).toContainText("low n");
+  await expect(metric("Median confidence shift")).toContainText("low n");
+  await expect(metrics).toContainText("counted over fewer than 30 detections (or retained pairs)");
+  await expect(metrics).toContainText("consecutive frames of the same object are not independent evidence");
+});
+
 test("the side-by-side view and the inspector have no accessibility violations", async ({ page }) => {
   await configureFog(page);
   await runOnSyntheticSample(page);

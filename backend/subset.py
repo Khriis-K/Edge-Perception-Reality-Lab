@@ -11,6 +11,7 @@ DEFAULT_SEED = 0
 DEFAULT_CAP = 300
 MAX_CAP = 100_000
 # A per-class AP over fewer objects than this is mostly noise, so the condition is flagged "low n".
+# The stability metrics reuse it for detections: a rate near 80% over 30 is still about +/-15 points.
 LOW_N_OBJECTS = 30
 
 
