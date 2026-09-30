@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, field_validator
 
+from backend.class_mapping import CLASS_MAPPING, ClassMapping
 from backend.dataset import DatasetIndex, FrameNotFound, camera_image, check_readiness, index_dataset
 from backend.degradations import KINDS, RANDOMIZED, TITLES, DegradationKind, parameters
 from backend.jobs import DegradationSettings, Experiment, FrameVariant, Job, JobManager, JobStatus, NoDetector
@@ -250,6 +251,13 @@ def dataset_subset(
         low_n_objects=LOW_N_OBJECTS,
         max_cap=MAX_CAP,
     )
+
+
+@router.get("/benchmark/class-mapping")
+def class_mapping() -> ClassMapping:
+    """Which COCO classes count as which dataset class, and which labels are ignore regions. Both change the metrics,
+    so Setup, Findings and the report show them."""
+    return CLASS_MAPPING
 
 
 def _dataset_index(request: Request) -> DatasetIndex:
