@@ -1,8 +1,9 @@
 """Detection runs as background jobs.
 
-Starting a run returns a job at once; a worker thread decodes the video, degrades each frame,
+Starting a run returns a job at once. For a Synthetic run, a worker thread decodes the video, degrades each frame,
 runs the detector on both the clean and the degraded frame, and writes both to the cache so the
-browser can fetch them by id. Only a run that finishes every frame becomes an experiment.
+browser can fetch them by id. For a Benchmark run, it runs the detector once on every frame of the subset manifest and
+stores the detections with the frame's ground truth. Only a run that finishes every frame becomes an experiment.
 A cancelled or failed run leaves nothing behind.
 
 A run whose experiment is already cached is not run again: its job is completed from the start.
@@ -11,6 +12,7 @@ A run whose experiment is already cached is not run again: its job is completed 
 import shutil
 import threading
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -18,12 +20,16 @@ from typing import Literal
 import cv2
 import numpy as np
 
+from backend.benchmark import BenchmarkFrame
+from backend.benchmark_run import BenchmarkExperiment, read_frame, run_warnings
 from backend.class_mapping import CLASS_MAPPING_VERSION
+from backend.conditions import CONDITIONS
 from backend.degradations import degrade, parameters
 from backend.detection import ModelRunner
 from backend.experiment import AppliedDegradation, DegradationSettings, Experiment, FrameResult, FrameVariant
-from backend.experiment_cache import ExperimentCache, experiment_id, fingerprint
+from backend.experiment_cache import ExperimentCache, benchmark_experiment_id, experiment_id, fingerprint
 from backend.samples import Sample
+from backend.subset import Manifest
 from backend.video import VideoError, open_video
 
 # Raw detections are kept down to this confidence, so the display threshold can be changed
@@ -32,6 +38,7 @@ CONFIDENCE_FLOOR = 0.05
 
 JobStatus = Literal["queued", "running", "completed", "cancelled", "failed"]
 ACTIVE: tuple[JobStatus, ...] = ("queued", "running")
+JobMode = Literal["synthetic", "benchmark"]
 
 
 class NoDetector(Exception):
@@ -42,8 +49,7 @@ class NoDetector(Exception):
 class Job:
     id: str
     experiment_id: str
-    sample: Sample
-    degradation: DegradationSettings
+    mode: JobMode
     status: JobStatus = "queued"
     frames_done: int = 0
     frames_total: int = 0
@@ -76,25 +82,69 @@ class JobManager:
     def is_cached(self, experiment_id: str) -> bool:
         return self.cache.load(experiment_id) is not None
 
+    def benchmark_id_for(self, manifest: Manifest) -> str:
+        """The id a Benchmark run of this manifest has, whether or not it has run."""
+        if self.runner is None:
+            raise NoDetector()
+        return benchmark_experiment_id(
+            manifest=manifest,
+            model=self.runner.info,
+            class_mapping_version=CLASS_MAPPING_VERSION,
+            confidence_floor=CONFIDENCE_FLOOR,
+        )
+
     def start(self, sample: Sample, degradation: DegradationSettings) -> Job:
+        """A Synthetic run: see _start()."""
+
+        def cached_frames(experiment_id: str) -> int | None:
+            cached = self.cache.load(experiment_id)
+            return None if cached is None else len(cached.frames)
+
+        return self._start(
+            "synthetic",
+            self.experiment_id_for(sample, degradation),
+            cached_frames,
+            lambda job: self._run(job, sample, degradation),
+        )
+
+    def start_benchmark(self, dataset_root: Path, manifest: Manifest) -> Job:
+        """A Benchmark run over every frame the manifest lists, which the caller has checked: see _start()."""
+
+        def cached_frames(experiment_id: str) -> int | None:
+            cached = self.cache.load_benchmark(experiment_id)
+            return None if cached is None else sum(len(frames) for frames in cached.frames.values())
+
+        return self._start(
+            "benchmark",
+            self.benchmark_id_for(manifest),
+            cached_frames,
+            lambda job: self._run_benchmark(job, dataset_root, manifest),
+        )
+
+    def _start(
+        self,
+        mode: JobMode,
+        job_experiment_id: str,
+        cached_frames: Callable[[str], int | None],
+        run: Callable[[Job], None],
+    ) -> Job:
         """A job completed at once if the experiment is cached, the job already running it if there is one,
-        or else a new job."""
+        or else a new job. `cached_frames` gives the cached experiment's frame count, or None if it isn't cached."""
         with self._starting:
-            job_experiment_id = self.experiment_id_for(sample, degradation)
             for job in self._jobs.values():
                 # One being cancelled is not joined: it will end "cancelled". A fresh run beside it is safe,
                 # since each job writes only to its own staging folder.
                 cancelling = job.cancel_requested.is_set()
                 if job.experiment_id == job_experiment_id and job.status in ACTIVE and not cancelling:
                     return job
-            job = Job(id=uuid.uuid4().hex, experiment_id=job_experiment_id, sample=sample, degradation=degradation)
-            cached = self.cache.load(job_experiment_id)
-            if cached is not None:
+            job = Job(id=uuid.uuid4().hex, experiment_id=job_experiment_id, mode=mode)
+            frames = cached_frames(job_experiment_id)
+            if frames is not None:
                 job.status, job.cached = "completed", True
-                job.frames_done = job.frames_total = len(cached.frames)
+                job.frames_done = job.frames_total = frames
             self._jobs[job.id] = job
         if not job.cached:
-            threading.Thread(target=self._run, args=(job,), daemon=True).start()
+            threading.Thread(target=run, args=(job,), daemon=True).start()
         return job
 
     def get(self, job_id: str) -> Job | None:
@@ -118,15 +168,14 @@ class JobManager:
         path = self.cache.frame_file(experiment.id, variant, index)
         return path if path.is_file() else None  # the cache may have been deleted by hand
 
-    def _run(self, job: Job) -> None:
-        settings = job.degradation
+    def _run(self, job: Job, sample: Sample, settings: DegradationSettings) -> None:
         # One generator for the whole run, drawn in frame order: each frame gets its own noise,
         # and the same seed reproduces every frame.
         rng = np.random.default_rng(settings.seed)
         folder = self.cache.staging(job.id)
         try:
             self.cache.open_staging(job.id)
-            with open_video(job.sample.path) as video:
+            with open_video(sample.path) as video:
                 job.frames_total = video.frame_count
                 job.status = "running"
                 results, size = [], (0, 0)
@@ -152,7 +201,7 @@ class JobManager:
                 folder,
                 Experiment(
                     id=job.experiment_id,
-                    sample_id=job.sample.id,
+                    sample_id=sample.id,
                     degradation=AppliedDegradation(
                         **settings.model_dump(), parameters=parameters(settings.kind, settings.severity)
                     ),
@@ -161,6 +210,44 @@ class JobManager:
                     frame_width=size[0],
                     frame_height=size[1],
                     frames=results,
+                ),
+            )
+            job.status = "completed"  # only after the experiment is stored, so pollers never see a gap
+        except Exception as exc:  # any failure must end the job, never leave it "running"
+            job.error = f"The run stopped at frame {job.frames_done}: {exc}"
+            _discard(job, folder, "failed")
+
+
+    def _run_benchmark(self, job: Job, dataset_root: Path, manifest: Manifest) -> None:
+        folder = self.cache.staging(job.id)
+        # Vocabulary order, so progress walks the conditions in the order the tree lists them.
+        work = [(condition, sample_id) for condition in CONDITIONS for sample_id in manifest.frames.get(condition, [])]
+        try:
+            folder.mkdir(parents=True)
+            job.frames_total = len(work)
+            job.status = "running"
+            frames: dict[str, list[BenchmarkFrame]] = {c: [] for c in CONDITIONS if c in manifest.frames}
+            for condition, sample_id in work:
+                if job.cancel_requested.is_set():
+                    break
+                image, truths = read_frame(dataset_root, sample_id)
+                predictions = self.runner.detect(image, CONFIDENCE_FLOOR)
+                frames[condition].append(BenchmarkFrame(id=sample_id, predictions=predictions, truths=truths))
+                job.frames_done += 1
+
+            if job.cancel_requested.is_set():
+                _discard(job, folder, "cancelled")
+                return
+            self.cache.commit(
+                folder,
+                BenchmarkExperiment(
+                    id=job.experiment_id,
+                    manifest=manifest,
+                    model=self.runner.info,
+                    class_mapping_version=CLASS_MAPPING_VERSION,
+                    confidence_floor=CONFIDENCE_FLOOR,
+                    frames=frames,
+                    warnings=run_warnings([f for listed in frames.values() for f in listed]),
                 ),
             )
             job.status = "completed"  # only after the experiment is stored, so pollers never see a gap

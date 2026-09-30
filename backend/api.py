@@ -7,12 +7,13 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Res
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, field_validator
 
+from backend.benchmark_run import BenchmarkResults, ManifestRefused, benchmark_results, check_manifest
 from backend.class_mapping import CLASS_MAPPING, ClassMapping
 from backend.dataset import DatasetIndex, FrameNotFound, camera_image, check_readiness, index_dataset
 from backend.degradations import KINDS, RANDOMIZED, TITLES, DegradationKind, parameters
 from backend.detection import ModelInfo
 from backend.experiment import AppliedDegradation, DegradationSettings, Experiment, FrameVariant
-from backend.jobs import Job, JobManager, JobStatus, NoDetector
+from backend.jobs import Job, JobManager, JobMode, JobStatus, NoDetector
 from backend.samples import SAMPLES
 from backend.stability import StabilityReport, stability_report
 from backend.subset import (
@@ -72,10 +73,17 @@ class StartRunRequest(BaseModel):
         return sample_id
 
 
+class StartBenchmarkRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # The manifest itself, as the Subset table draws it or as saved to a file. Never a path.
+    manifest: Manifest
+
+
 class JobResponse(BaseModel):
     id: str
     experiment_id: str
-    mode: Literal["synthetic"]
+    mode: JobMode
     status: JobStatus
     frames_done: int
     frames_total: int
@@ -96,7 +104,7 @@ class JobResponse(BaseModel):
         return cls(
             id=job.id,
             experiment_id=job.experiment_id,
-            mode="synthetic",
+            mode=job.mode,
             status=job.status,
             frames_done=job.frames_done,
             frames_total=job.frames_total,
@@ -322,6 +330,44 @@ def dataset_subset(
         low_n_objects=LOW_N_OBJECTS,
         max_cap=MAX_CAP,
     )
+
+
+@router.post(
+    "/benchmark/jobs",
+    status_code=202,
+    responses={
+        200: {"description": "Cached: the results were reused"},
+        409: {"description": "The dataset is not configured or not ready"},
+    },
+)
+def start_benchmark(body: StartBenchmarkRequest, request: Request, jobs: Jobs, response: Response) -> JobResponse:
+    """Run the detector over every frame of the manifest and score it, or reuse the cached results. Poll and cancel
+    it like any job. A manifest from another condition vocabulary, or listing frames the local dataset doesn't have
+    under that condition, is refused (422) with the reason."""
+    if jobs.runner is None:
+        raise HTTPException(status_code=503, detail=NO_MODEL_MESSAGE)
+    try:
+        check_manifest(body.manifest, _dataset_index(request).frames)
+    except ManifestRefused as refused:
+        raise HTTPException(status_code=422, detail=str(refused)) from refused
+    job = jobs.start_benchmark(request.app.state.dataset_root, body.manifest)
+    if job.cached:
+        response.status_code = 200
+    return JobResponse.of(job)
+
+
+@router.get("/benchmark/experiments/{experiment_id}")
+def get_benchmark_results(
+    experiment_id: str,
+    jobs: Jobs,
+    display_threshold: Annotated[float, Query(ge=0, le=1, allow_inf_nan=False)],
+) -> BenchmarkResults:
+    """Per condition and class: AP, precision and recall at the display threshold, and object and frame counts.
+    Scored from the stored detections, so a new threshold never re-runs inference."""
+    experiment = jobs.cache.load_benchmark(experiment_id)
+    if experiment is None:
+        raise HTTPException(status_code=404, detail="No completed benchmark with that id.")
+    return benchmark_results(experiment, display_threshold)
 
 
 @router.get("/benchmark/class-mapping")

@@ -5,8 +5,10 @@ import "./styles.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router";
+import { BenchmarkResultsProvider } from "./BenchmarkResults";
 import { CurrentJobProvider } from "./CurrentJob";
 import { DegradationSettingsProvider } from "./DegradationSettings";
+import { SubsetChoiceProvider } from "./SubsetChoice";
 import { SyntheticResultsProvider } from "./SyntheticResults";
 import { Workbench } from "./Workbench";
 
@@ -14,14 +16,18 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <CurrentJobProvider>
       <SyntheticResultsProvider>
-        <DegradationSettingsProvider>
-          <BrowserRouter>
-            <Routes>
-              <Route path="/:section" element={<Workbench />} />
-              <Route path="*" element={<Navigate to="/setup" replace />} />
-            </Routes>
-          </BrowserRouter>
-        </DegradationSettingsProvider>
+        <BenchmarkResultsProvider>
+          <SubsetChoiceProvider>
+            <DegradationSettingsProvider>
+              <BrowserRouter>
+                <Routes>
+                  <Route path="/:section" element={<Workbench />} />
+                  <Route path="*" element={<Navigate to="/setup" replace />} />
+                </Routes>
+              </BrowserRouter>
+            </DegradationSettingsProvider>
+          </SubsetChoiceProvider>
+        </BenchmarkResultsProvider>
       </SyntheticResultsProvider>
     </CurrentJobProvider>
   </StrictMode>,

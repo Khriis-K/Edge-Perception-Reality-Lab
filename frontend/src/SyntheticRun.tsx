@@ -26,8 +26,10 @@ export function SyntheticRun() {
   const { results, error: resultsError, openId, frameIndex, setFrameIndex } = useSyntheticResults();
   const running = isActive(job);
   const preview = useRunPreview(sampleId, settings);
-  // A finished job's "Done" would be wrong next to another run opened from the history.
-  const status = job?.status === "completed" && job.experiment_id !== openId ? null : job;
+  // A finished job's "Done" would be wrong next to another run opened from the history. A Benchmark run's status
+  // belongs to its own screen, though while it runs, Start run stays disabled: one run at a time.
+  const synthetic = job?.mode === "synthetic" ? job : null;
+  const status = synthetic?.status === "completed" && synthetic.experiment_id !== openId ? null : synthetic;
 
   useEffect(() => {
     fetchSamples()

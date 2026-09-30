@@ -1,15 +1,14 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import { fetchSubset, type ConditionSummary, type Manifest, type Subset } from "./api/client";
-
-/** The seed and cap the user chose; null until they change one, so the server's defaults apply. */
-type Choice = { seed: number; cap: number } | null;
+import { conditionName } from "./benchmarkFormat";
+import { useSubsetChoice, type SubsetChoice as Choice } from "./SubsetChoice";
 
 /**
  * The seeded subset: up to `cap` frames per condition, drawn with `seed`. Shows per condition how many frames and
  * objects it holds and its rarest class, flags conditions too small to trust, and offers the manifest to save.
  */
 export function SubsetTable({ ready }: { ready: boolean }) {
-  const [choice, setChoice] = useState<Choice>(null);
+  const [choice, setChoice] = useSubsetChoice();
   const { subset, error, loading } = useSubset(ready, choice);
 
   return (
@@ -161,7 +160,8 @@ function ManifestLink({ manifest }: { manifest: Manifest }) {
   );
 }
 
-function useSubset(ready: boolean, choice: Choice) {
+/** The subset drawn with the choice, once the dataset is ready. */
+export function useSubset(ready: boolean, choice: Choice) {
   const [subset, setSubset] = useState<Subset | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -185,12 +185,6 @@ function useSubset(ready: boolean, choice: Choice) {
   }, [ready, choice]);
 
   return { subset, error, loading };
-}
-
-/** "fog-night" → "Fog · night". */
-function conditionName(condition: string): string {
-  const [weather, light] = condition.split("-");
-  return `${weather.charAt(0).toUpperCase()}${weather.slice(1)} · ${light}`;
 }
 
 function toWhole(value: string, min: number, max: number): number {

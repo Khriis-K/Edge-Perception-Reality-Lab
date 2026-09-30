@@ -20,6 +20,9 @@ export type DatasetPartStatus = components["schemas"]["DatasetPartStatus"];
 export type Subset = components["schemas"]["SubsetResponse"];
 export type ConditionSummary = components["schemas"]["ConditionSummary"];
 export type Manifest = components["schemas"]["Manifest"];
+export type BenchmarkResults = components["schemas"]["BenchmarkResults"];
+export type ConditionResult = components["schemas"]["ConditionResult"];
+export type ClassMetrics = components["schemas"]["ClassMetrics"];
 
 // Empty in production: the backend serves this page, so the API is same-origin.
 const API_BASE: string = import.meta.env.VITE_API_BASE ?? "";
@@ -116,6 +119,26 @@ export function fetchExperiment(experimentId: string): Promise<Experiment> {
 /** How much the degraded detections differ from the clean ones: stability, not accuracy. */
 export function fetchStability(experimentId: string): Promise<StabilityReport> {
   return request(`/api/experiments/${encodeURIComponent(experimentId)}/stability`);
+}
+
+/** Runs the detector over every frame of the manifest, or returns a completed job with `cached` set. The manifest
+ * is sent as JSON, never as a path; the server refuses one it can't run, and says why. */
+export function startBenchmark(manifest: Manifest): Promise<Job> {
+  return request("/api/benchmark/jobs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ manifest }),
+  });
+}
+
+/** Per-condition and per-class AP, and precision and recall at the display threshold, scored from stored detections. */
+export function fetchBenchmarkResults(
+  experimentId: string,
+  displayThreshold: number,
+  signal: AbortSignal,
+): Promise<BenchmarkResults> {
+  const id = encodeURIComponent(experimentId);
+  return request(`/api/benchmark/experiments/${id}?display_threshold=${displayThreshold}`, { signal });
 }
 
 export function frameImageUrl(experimentId: string, variant: FrameVariant, frameIndex: number): string {

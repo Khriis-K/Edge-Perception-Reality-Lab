@@ -94,6 +94,8 @@ npm --prefix frontend run gen:api
 
 A run is cached under an id built from everything that affects its results: the input video's content, the model version, the class-mapping version, the confidence floor, and the degradation type, severity and seed. Starting a run with the same settings reuses the cached results instead of running inference again, including after a restart. Setup and Synthetic list the cached runs, and Setup shows the cache folder and its size. A cancelled or failed run is never cached.
 
+A Benchmark run is cached the same way, with the subset manifest (seed, cap, condition vocabulary version and every frame id) in place of the video's content. It stores the detections and each frame's ground truth, not the images. The dataset's files are not fingerprinted, so delete `cache/` if you change the dataset itself (see `docs/adr/0002-what-the-experiment-id-covers.md`).
+
 To remove cached artifacts, delete `cache/`, or one run's folder inside it, whenever you like; a run in progress at that moment fails and can be started again. `python -m backend --cache-dir <folder>` keeps the cache somewhere else.
 
 ## Test
