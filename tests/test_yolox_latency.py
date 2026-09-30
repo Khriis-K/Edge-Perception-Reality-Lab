@@ -8,6 +8,8 @@ import statistics
 import onnxruntime as ort
 import pytest
 
+from backend.samples import SAMPLES
+from backend.video import open_video
 from backend.yolox_runner import CPU, MODEL_PATH, YoloxRunner, choose_providers
 from scripts.make_sample_video import draw_frame
 
@@ -56,11 +58,15 @@ def test_the_providers_the_app_picks_give_the_cpu_detections_within_tolerance(cp
     chosen = YoloxRunner(MODEL_PATH)
     assert chosen.info.provider == providers[0]
 
-    for index in (0, 20, 47):
-        image = draw_frame(index)
-        expected = cpu_runner.detect(image, 0.05)
-        actual = chosen.detect(image, 0.05)
+    # Real frames: the synthetic ones give no detections, which would make the comparison [] == [].
+    with open_video(SAMPLES["krakow-city-driving"].path) as video:
+        every_tenth = list(video.frames())[::10]
 
+    for image in every_tenth:
+        expected = cpu_runner.detect(image, 0.3)
+        actual = chosen.detect(image, 0.3)
+
+        assert expected, "a frame with no detections compares nothing"
         assert [d.label for d in actual] == [d.label for d in expected]
         for a, e in zip(actual, expected):
             assert a.confidence == pytest.approx(e.confidence, abs=TOLERANCE)

@@ -29,6 +29,8 @@ CPU = "CPUExecutionProvider"
 # as-is: an accelerated provider must not change the detections beyond numeric tolerance (tests/test_yolox_latency.py
 # checks this on machines that have one). Others, such as Azure or CoreML, are not used.
 ACCELERATED = ("CUDAExecutionProvider", "DmlExecutionProvider")
+# TF32, CUDA's default on Ampere and newer, moves confidences by ~1e-2 against the CPU; without it they match to ~1e-6.
+PROVIDER_OPTIONS = {"CUDAExecutionProvider": {"use_tf32": "0"}}
 
 # fmt: off
 COCO_CLASSES = [
@@ -107,10 +109,19 @@ def choose_providers(available: list[str]) -> list[str]:
     return accelerated[:1] + [CPU]
 
 
+def session_providers(providers: list[str]) -> list[tuple[str, dict[str, str]]]:
+    """Each provider with the options it runs with."""
+    return [(p, PROVIDER_OPTIONS.get(p, {})) for p in providers]
+
+
 class YoloxRunner:
     def __init__(self, model_path: Path, providers: list[str] | None = None):
         providers = providers or choose_providers(ort.get_available_providers())
-        self.session = ort.InferenceSession(str(model_path), providers=providers)
+        if "CUDAExecutionProvider" in providers:
+            # The CUDA and cuDNN DLLs from the nvidia-* wheels are not on the Windows DLL search path until preloaded;
+            # without this CUDA fails to load and the session quietly falls back to the CPU.
+            ort.preload_dlls()
+        self.session = ort.InferenceSession(str(model_path), providers=session_providers(providers))
         self.input_name = self.session.get_inputs()[0].name
         self.info = ModelInfo(
             name="YOLOX-Nano (COCO)",

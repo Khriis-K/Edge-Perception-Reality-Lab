@@ -2,7 +2,7 @@
 
 import pytest
 
-from backend.yolox_runner import CPU, choose_providers
+from backend.yolox_runner import CPU, choose_providers, session_providers
 
 
 def test_cpu_alone_when_nothing_accelerated_is_available():
@@ -26,3 +26,11 @@ def test_providers_we_have_not_vetted_are_not_used(provider):
 
 def test_cpu_is_kept_even_if_not_listed():
     assert choose_providers([]) == [CPU]
+
+
+def test_cuda_runs_without_tf32_and_other_providers_with_their_defaults():
+    # TF32 is ORT's CUDA default on Ampere and newer; it moves confidences by ~1e-2 against the CPU.
+    assert session_providers(["CUDAExecutionProvider", CPU]) == [
+        ("CUDAExecutionProvider", {"use_tf32": "0"}),
+        (CPU, {}),
+    ]
