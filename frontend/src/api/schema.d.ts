@@ -1,6 +1,27 @@
 // Generated from the backend OpenAPI schema by `npm run gen:api`. Do not edit.
 
 export interface paths {
+    "/api/benchmark/class-mapping": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Class Mapping
+         * @description Which COCO classes count as which dataset class, and which labels are ignore regions. Both change the metrics,
+         *     so Setup, Findings and the report show them.
+         */
+        get: operations["class_mapping_api_benchmark_class_mapping_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/dataset/frames/{sample_id}": {
         parameters: {
             query?: never;
@@ -279,6 +300,19 @@ export interface components {
             /** Y2 */
             y2: number;
         };
+        /** ClassMapping */
+        ClassMapping: {
+            /** Ignore Labels */
+            ignore_labels: string[];
+            /** Ignore Rule */
+            ignore_rule: string;
+            /** Mapping */
+            mapping: components["schemas"]["MappingRow"][];
+            /** Unmapped Rule */
+            unmapped_rule: string;
+            /** Version */
+            version: number;
+        };
         /** ConditionSummary */
         ConditionSummary: {
             /** Condition */
@@ -476,6 +510,13 @@ export interface components {
             /** Vocabulary Version */
             vocabulary_version: number;
         };
+        /** MappingRow */
+        MappingRow: {
+            /** Coco */
+            coco: string;
+            /** Dataset Class */
+            dataset_class: string;
+        };
         /** Match */
         Match: {
             clean: components["schemas"]["Detection"] | null;
@@ -579,6 +620,26 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    class_mapping_api_benchmark_class_mapping_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClassMapping"];
+                };
+            };
+        };
+    };
     dataset_frame_api_dataset_frames__sample_id__get: {
         parameters: {
             query?: never;

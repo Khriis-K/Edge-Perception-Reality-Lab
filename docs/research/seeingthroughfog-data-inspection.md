@@ -56,7 +56,8 @@ way, one condition would measure two effects.
   `2018-12-10_08-55-01_00600` line 8). The adapter treats these as malformed and excludes the frame.
 - Classes beyond the six in the spec: `DontCare` (5,295), `Pedestrian_is_group` (1,134), `PassengerCar_is_group`
   (238), a few other `*_is_group`, `person` (3) and `train` (1). Only the four main classes are counted as objects
-  in the Subset table. How the class mapping and ignore regions treat the rest is still open.
+  in the Subset table. For Benchmark scoring, `DontCare` and every `*_is_group` box are ignore regions, like the
+  fallback classes; the stray `person` and `train` labels are dropped (see `backend/class_mapping.py`).
 - Reading every refined metadata and label file took 300–340 s, even on a second pass. The app builds the index once
   per run and caches it in memory.
 
@@ -156,5 +157,4 @@ over HTTP range requests; nothing downloaded yet.
 
 - Whether the STF paper's 1.5k labelled chamber frames were ever published, and where.
 - Whether PixelAccurateBenchmark scenes are static enough to share hand-drawn boxes across conditions.
-- How `DontCare` and the `*_is_group` classes enter the class mapping and ignore-region rule.
 - Checksums for the per-folder archives.
