@@ -682,6 +682,9 @@ p {
   font-weight: 600;
 }
 
+/* Counts: headers and numbers right-aligned together, so digits line up under their heading. */
+.subset-table th:nth-child(2),
+.subset-table th:nth-child(3),
 .subset-table td:nth-child(2),
 .subset-table td:nth-child(3) {
   text-align: right;
