@@ -15,6 +15,10 @@ Worst-frame score, per frame:
 where confidence loss is the total confidence that spatially matched detections (retained or
 class-changed) lost; gains count as 0. Dropped detections add nothing to it: they are already counted.
 Each unit is one detection's worth: losing a full 1.0 of confidence weighs as much as one drop.
+
+A clip metric counted over fewer than LOW_N_OBJECTS detections (or pairs) is flagged low n. The
+counts are detections across frames, and consecutive frames of one object are not independent
+evidence, so on video the flag under-warns: 30 frames of one car pass it.
 """
 
 import statistics
@@ -25,6 +29,7 @@ from pydantic import BaseModel
 
 from backend.detection import Box, Detection
 from backend.jobs import FrameResult
+from backend.subset import LOW_N_OBJECTS
 
 # Fixed, so the metrics don't move with the viewer's display threshold. The raw detections go
 # down to the confidence floor, where boxes flicker in and out; matching there would be mostly noise.
@@ -67,17 +72,20 @@ class Count(BaseModel):
     count: int
     total: int
     rate: float | None  # None when there is nothing to count, never a flattering 0 or 1
+    low_n: bool  # total is below LOW_N_OBJECTS
 
 
 class ConfidenceShift(BaseModel):
     value: float | None  # median of degraded minus clean over retained pairs
     pairs: int
+    low_n: bool  # pairs is below LOW_N_OBJECTS
 
 
 class StabilityReport(BaseModel):
     confidence_threshold: float
     iou_threshold: float
     weights: ScoreWeights
+    low_n_objects: int  # a metric counted over fewer detections is flagged low n
     frames_evaluated: int
     retention: Count  # retained of all clean detections
     introduced: Count  # introduced of all degraded detections
@@ -160,14 +168,19 @@ def stability_report(results: list[FrameResult]) -> StabilityReport:
         confidence_threshold=STABILITY_THRESHOLD,
         iou_threshold=IOU_THRESHOLD,
         weights=WEIGHTS,
+        low_n_objects=LOW_N_OBJECTS,
         frames_evaluated=len(frames),
         retention=_count(retained, clean_total),
         introduced=_count(introduced, degraded_total),
         class_changes=_count(class_changes, clean_total),
-        median_confidence_shift=ConfidenceShift(value=statistics.median(shifts) if shifts else None, pairs=len(shifts)),
+        median_confidence_shift=ConfidenceShift(
+            value=statistics.median(shifts) if shifts else None,
+            pairs=len(shifts),
+            low_n=len(shifts) < LOW_N_OBJECTS,
+        ),
         frames=frames,
     )
 
 
 def _count(count: int, total: int) -> Count:
-    return Count(count=count, total=total, rate=count / total if total else None)
+    return Count(count=count, total=total, rate=count / total if total else None, low_n=total < LOW_N_OBJECTS)

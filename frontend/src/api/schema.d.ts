@@ -296,6 +296,8 @@ export interface components {
         };
         /** ConfidenceShift */
         ConfidenceShift: {
+            /** Low N */
+            low_n: boolean;
             /** Pairs */
             pairs: number;
             /** Value */
@@ -305,6 +307,8 @@ export interface components {
         Count: {
             /** Count */
             count: number;
+            /** Low N */
+            low_n: boolean;
             /** Rate */
             rate: number | null;
             /** Total */
@@ -529,6 +533,8 @@ export interface components {
             introduced: components["schemas"]["Count"];
             /** Iou Threshold */
             iou_threshold: number;
+            /** Low N Objects */
+            low_n_objects: number;
             median_confidence_shift: components["schemas"]["ConfidenceShift"];
             retention: components["schemas"]["Count"];
             weights: components["schemas"]["ScoreWeights"];

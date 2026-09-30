@@ -7,6 +7,7 @@ import pytest
 from backend.detection import Box, Detection
 from backend.jobs import FrameResult
 from backend.stability import WEIGHTS, match_frame, stability_report
+from backend.subset import LOW_N_OBJECTS
 
 LEFT = (0.1, 0.1, 0.3, 0.5)
 RIGHT = (0.6, 0.1, 0.8, 0.5)
@@ -214,3 +215,47 @@ def test_a_confidence_gain_is_not_a_loss():
 
 def test_weights_are_one_detection_each_and_one_per_unit_of_confidence_lost():
     assert WEIGHTS.model_dump() == {"dropped": 1.0, "introduced": 1.0, "class_changes": 1.0, "confidence_loss": 1.0}
+
+
+def steady_clip(detections):
+    """One car per frame, kept in the degraded frame: every metric's total equals `detections`."""
+    return stability_report([frame(i, [det("car")], [det("car")]) for i in range(detections)])
+
+
+def low_n_flags(report):
+    return [
+        report.retention.low_n,
+        report.introduced.low_n,
+        report.class_changes.low_n,
+        report.median_confidence_shift.low_n,
+    ]
+
+
+def test_every_metric_is_flagged_low_n_one_detection_short_of_the_minimum():
+    assert low_n_flags(steady_clip(LOW_N_OBJECTS - 1)) == [True] * 4
+
+
+def test_no_metric_is_flagged_low_n_at_the_minimum():
+    assert low_n_flags(steady_clip(LOW_N_OBJECTS)) == [False] * 4
+
+
+def test_a_clip_with_no_detections_is_flagged_low_n_everywhere():
+    assert low_n_flags(stability_report([frame(0, [], [])])) == [True] * 4
+
+
+def test_each_metric_is_flagged_by_its_own_total():
+    # Clean detections at the minimum, but only one of them survives: retention and class changes
+    # count over the clean detections, introduced and the confidence shift over far fewer.
+    clean = [frame(i, [det("car")], []) for i in range(LOW_N_OBJECTS - 1)] + [frame(99, [det("car")], [det("car")])]
+    report = stability_report(clean)
+
+    assert (report.retention.total, report.introduced.total, report.median_confidence_shift.pairs) == (
+        LOW_N_OBJECTS,
+        1,
+        1,
+    )
+    assert low_n_flags(report) == [False, True, False, True]
+
+
+def test_the_report_serves_the_minimum_it_flags_against():
+    assert stability_report([]).low_n_objects == LOW_N_OBJECTS == 30
