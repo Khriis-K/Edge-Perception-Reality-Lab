@@ -90,6 +90,4 @@ def truth_role(label: str) -> TruthRole:
 
 def map_detections(detections: list[Detection]) -> list[Detection]:
     """Copies of the mappable detections, relabelled with their dataset class. Unmapped ones are left out."""
-    return [
-        d.model_copy(update={"label": dataset_class(d.label)}) for d in detections if dataset_class(d.label) is not None
-    ]
+    return [d.model_copy(update={"label": COCO_TO_DATASET[d.label]}) for d in detections if d.label in COCO_TO_DATASET]

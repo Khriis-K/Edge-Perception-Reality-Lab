@@ -329,6 +329,31 @@ def test_frame_results_use_the_display_threshold():
     assert (loose.hits, loose.false_alarms, loose.score) == (1, 1, WEIGHTS.false_alarms)
 
 
+def test_ignored_predictions_count_against_neither_precision_nor_ap():
+    frames = [frame("a", [det("car", 0.9, LEFT), det("car", 0.95, RIGHT)], [gt("PassengerCar", LEFT), gt("Vehicle", RIGHT)])]
+
+    car = by_class(evaluate_condition(frames, display_threshold=0.5))["PassengerCar"]
+
+    assert (car.predictions, car.hits, car.precision) == (1, 1, 1.0)
+    assert car.ap == pytest.approx(1.0)
+    assert [(p.threshold, p.precision) for p in car.pr_curve] == [(0.9, 1.0)]
+
+
+def test_class_frames_count_only_frames_holding_that_class():
+    frames = [
+        frame("a", [], [gt("PassengerCar"), gt("PassengerCar", RIGHT)]),
+        frame("b", [], [gt("Pedestrian")]),
+        frame("c", [], [gt("Vehicle")]),
+    ]
+
+    metrics = evaluate_condition(frames, display_threshold=0.5)
+
+    assert {c.class_name: c.frames for c in metrics.classes} == {
+        "PassengerCar": 1, "LargeVehicle": 0, "RidableVehicle": 0, "Pedestrian": 1,
+    }
+    assert metrics.frames == 3
+
+
 def test_class_confusion_counts_against_both_classes_ap():
     # A car found as a truck: a false positive for LargeVehicle and an unfound PassengerCar.
     metrics = evaluate_condition([frame("a", [det("truck", 0.9)], [gt("PassengerCar")])], display_threshold=0.5)

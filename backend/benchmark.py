@@ -11,7 +11,8 @@ classes, each pass taking predictions in descending confidence:
 Hits come first, so a correct prediction is never shadowed by a more confident wrong-class one on the same object.
 
 AP, per class: predictions ranked by confidence, a prediction counting as a true positive only when it is a hit.
-A class confusion is a false positive for the predicted class and an unfound object of the true one. AP is the area
+A class confusion is a false positive for the predicted class and an unfound object of the true one. Ignored
+predictions are left out entirely, so they lower neither precision nor AP. AP is the area
 under the interpolated precision-recall curve (all points; precision at recall r is the best precision at any recall
 >= r). Tied confidences form one point, so AP never depends on how ties are ordered. With no objects AP is undefined
 (None); with objects but no hits it is 0. mAP is the mean over the classes whose AP is defined.
@@ -20,7 +21,8 @@ Worst-frame score, per frame, at the display threshold:
     misses x 1 + false alarms x 1 + class confusions x 1
 Hits and ignored predictions add nothing.
 
-Every metric carries its object and frame counts, and is flagged low n below LOW_N_OBJECTS objects.
+Every metric carries its object and frame counts (for a class, the frames holding at least one of its objects), and
+is flagged low n below LOW_N_OBJECTS objects.
 """
 
 import math
@@ -41,13 +43,13 @@ IOU_SLACK = 1e-9  # float slack, so an overlap of exactly the threshold counts
 Outcome = Literal["hit", "miss", "false_alarm", "class_confusion", "ignored"]
 
 
-class ScoreWeights(BaseModel):
+class BenchmarkWeights(BaseModel):
     misses: float
     false_alarms: float
     class_confusions: float
 
 
-WEIGHTS = ScoreWeights(misses=1.0, false_alarms=1.0, class_confusions=1.0)
+WEIGHTS = BenchmarkWeights(misses=1.0, false_alarms=1.0, class_confusions=1.0)
 
 
 class GroundTruth(BaseModel):
@@ -88,7 +90,7 @@ class PRPoint(BaseModel):
 class ClassMetrics(BaseModel):
     class_name: str
     objects: int
-    frames: int
+    frames: int  # frames holding at least one of the class's objects
     low_n: bool
     ap: float | None
     predictions: int  # at or above the display threshold
@@ -101,7 +103,7 @@ class ClassMetrics(BaseModel):
 class ConditionMetrics(BaseModel):
     iou_threshold: float
     display_threshold: float
-    weights: ScoreWeights
+    weights: BenchmarkWeights
     low_n_objects: int
     frames: int
     objects: int
@@ -208,22 +210,25 @@ def evaluate_condition(frames: list[BenchmarkFrame], display_threshold: float) -
 
     scored: dict[str, list[tuple[float, bool]]] = {c: [] for c in MAIN_CLASSES}
     objects = dict.fromkeys(MAIN_CLASSES, 0)
+    frames_with = dict.fromkeys(MAIN_CLASSES, 0)
     frame_results = []
     for frame in frames:
         predictions = map_detections(frame.predictions)
         # Greedy matching in confidence order means the hits above any threshold are the same whether or not the
         # predictions below it are there, so one full match serves AP and every threshold.
         for match in match_frame(predictions, frame.truths):
-            if match.prediction is not None:
+            if match.prediction is not None and match.outcome != "ignored":
                 scored[match.prediction.label].append((match.prediction.confidence, match.outcome == "hit"))
-        for truth in frame.truths:
-            if truth_role(truth.label) == "object":
-                objects[truth.label] += 1
+        present = [t.label for t in frame.truths if truth_role(t.label) == "object"]
+        for label in present:
+            objects[label] += 1
+        for label in set(present):
+            frames_with[label] += 1
         # Frame outcomes are matched afresh: a confusion depends on which objects the shown predictions left free.
         shown = [p for p in predictions if p.confidence >= display_threshold]
         frame_results.append(frame_benchmark(frame.id, match_frame(shown, frame.truths)))
 
-    classes = [_class_metrics(c, scored[c], objects[c], len(frames), display_threshold) for c in MAIN_CLASSES]
+    classes = [_class_metrics(c, scored[c], objects[c], frames_with[c], display_threshold) for c in MAIN_CLASSES]
     aps = [c.ap for c in classes if c.ap is not None]
     return ConditionMetrics(
         iou_threshold=IOU_THRESHOLD,
