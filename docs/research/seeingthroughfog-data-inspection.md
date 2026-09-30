@@ -7,7 +7,18 @@ First look at the real download, prompted by the fog-chamber comment on #9. Insp
 ## How the download is packaged
 
 Per-folder split archives, e.g. `SeeingThroughFog/cam_stereo_left_lut/cam_stereo_left_lut.z01`–`.z23` + `.zip`.
-There is no combined `SeeingThroughFogCompressed.*` archive, which is what `backend/SeeingThroughFog_sha256sum.txt` lists.
+There is no combined `SeeingThroughFogCompressed.*` archive, which is what upstream's `SeeingThroughFog_sha256sum.txt` lists.
+
+## Checksums: none published for the per-folder archives (2026-09-29, for #30)
+
+- The upstream repository's only checksum file is `SeeingThroughFog_sha256sum.txt`. It lists
+  `SeeingThroughFogCompressed.z01`–`.z18` + `.zip`, and the upstream README says to run `sha256sum -c` against them.
+- The download listing (472 files) has only per-folder `.zip`/`.zNN` archives and calibration JSONs. None is a
+  checksum file.
+- The upstream issues have no report about checksums for the split archives.
+
+So the checksum command was removed. Zip stores a CRC32 per file, so corruption fails at extraction. Hashing our
+own copy would only check it against itself.
 
 ## Metadata (`labeltool_labels`)
 
@@ -157,4 +168,3 @@ over HTTP range requests; nothing downloaded yet.
 
 - Whether the STF paper's 1.5k labelled chamber frames were ever published, and where.
 - Whether PixelAccurateBenchmark scenes are static enough to share hand-drawn boxes across conditions.
-- Checksums for the per-folder archives.

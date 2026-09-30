@@ -79,7 +79,8 @@ function NotNeeded({ items }: { items: string[] }) {
         ))}
       </ul>
       <p>
-        Verify downloaded archives with <code>python -m backend.checksums ARCHIVE_FOLDER</code>.
+        Check that every <code>.z01</code>…<code>.zNN</code> part is downloaded and that extraction finishes with no
+        CRC errors.
       </p>
     </div>
   );
