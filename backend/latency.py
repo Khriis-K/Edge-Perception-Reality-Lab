@@ -65,18 +65,18 @@ def summarize(timings: list[FrameTiming], warmup_frames: int = WARMUP_FRAMES) ->
     measured = timings[warmup_frames:]
     if not measured:
         return None
-    inference = [s for t in measured for s in t.inference_s]
-    summary = LatencySummary(
+    inference = stage_latency([s for t in measured for s in t.inference_s])
+    processing = stage_latency([s for t in measured for s in t.processing_s])
+    read = stage_latency([t.read_s for t in measured])
+    frame_ms = read.p50_ms + processing.p50_ms + inference.p50_ms
+    return LatencySummary(
         warmup_frames=warmup_frames,
         frames=len(measured),
-        inference_runs=len(inference),
-        inference=stage_latency(inference),
-        processing=stage_latency([s for t in measured for s in t.processing_s]),
-        read=stage_latency([t.read_s for t in measured]),
+        inference_runs=sum(len(t.inference_s) for t in measured),
+        inference=inference,
+        processing=processing,
+        read=read,
         degrade=stage_latency([t.degrade_s for t in measured]),
         render=stage_latency([t.render_s for t in measured]),
-        effective_fps=None,
+        effective_fps=1000 / frame_ms if frame_ms > 0 else None,
     )
-    frame_ms = summary.read.p50_ms + summary.processing.p50_ms + summary.inference.p50_ms
-    summary.effective_fps = 1000 / frame_ms if frame_ms > 0 else None
-    return summary

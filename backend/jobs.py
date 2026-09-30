@@ -140,20 +140,20 @@ class JobManager:
                         break
                     degraded = degrade(image, settings.kind, settings.severity, rng)
                     degraded_at = time.perf_counter()
-                    clean, clean_s = self._detect(image)
-                    detected, degraded_s = self._detect(degraded)
+                    clean_run, clean_s = self._detect(image)
+                    degraded_run, degraded_s = self._detect(degraded)
                     detected_at = time.perf_counter()
                     _write_frame(folder, "clean", index, image)
                     _write_frame(folder, "degraded", index, degraded)
-                    rendered = time.perf_counter()
-                    results.append(FrameResult(index=index, clean=clean.detections, degraded=detected.detections))
+                    written = time.perf_counter()
+                    results.append(FrameResult(index=index, clean=clean_run.detections, degraded=degraded_run.detections))
                     timings.append(
                         FrameTiming(
                             read_s=read - started,
                             degrade_s=degraded_at - read,
-                            inference_s=[clean.inference_s, detected.inference_s],
-                            processing_s=[clean_s - clean.inference_s, degraded_s - detected.inference_s],
-                            render_s=rendered - detected_at,
+                            inference_s=[clean_run.inference_s, degraded_run.inference_s],
+                            processing_s=[clean_s - clean_run.inference_s, degraded_s - degraded_run.inference_s],
+                            render_s=written - detected_at,
                         )
                     )
                     size = image.shape[1], image.shape[0]

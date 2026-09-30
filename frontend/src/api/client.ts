@@ -6,6 +6,7 @@ export type Job = components["schemas"]["JobResponse"];
 export type Experiment = components["schemas"]["Experiment"];
 export type ModelInfo = components["schemas"]["ModelInfo"];
 export type LatencySummary = components["schemas"]["LatencySummary"];
+export type StageLatency = components["schemas"]["StageLatency"];
 export type ExperimentSummary = components["schemas"]["ExperimentSummary"];
 export type RunPreview = components["schemas"]["RunPreview"];
 export type CacheInfo = components["schemas"]["CacheInfo"];

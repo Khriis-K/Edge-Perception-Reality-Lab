@@ -31,7 +31,7 @@ test("the latency section has no accessibility violations", async ({ page }) => 
   await expect(latency(page)).toBeVisible();
 
   const results = await new AxeBuilder({ page })
-    .include('[aria-label="Latency"]')
+    .include('section[aria-label="Latency"]')
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
     .analyze();
   expect(results.violations).toEqual([]);

@@ -1,4 +1,5 @@
-import type { LatencySummary } from "./api/client";
+import type { ReactNode } from "react";
+import type { LatencySummary, StageLatency } from "./api/client";
 import { formatMs, modelLine } from "./latencyFormat";
 import { Metric } from "./Stability";
 import { useSyntheticResults } from "./SyntheticResults";
@@ -31,29 +32,33 @@ function LatencyMetrics({ latency, provider }: { latency: LatencySummary; provid
         Measured on this machine with {provider}. Timing for comparison between runs, not a real-time claim for other
         hardware.
       </p>
-      <dl className="metrics" aria-label="Latency">
-        <Metric name="Inference" value={`${formatMs(inference.p50_ms)} p50`}>
-          p90 {formatMs(inference.p90_ms)} over {latency.inference_runs} model calls
-        </Metric>
+      <dl className="metrics" aria-label="Latency by stage">
+        <StageMetric name="Inference" stage={inference}>
+          over {latency.inference_runs} model calls
+        </StageMetric>
         <Metric name="Effective fps" value={fps === null ? "—" : fps.toFixed(1)}>
           reading and detecting one stream, at the medians
         </Metric>
-        <Metric name="Pre/post-processing" value={`${formatMs(processing.p50_ms)} p50`}>
-          p90 {formatMs(processing.p90_ms)}
-        </Metric>
-        <Metric name="Read" value={`${formatMs(read.p50_ms)} p50`}>
-          p90 {formatMs(read.p90_ms)} to decode a frame
-        </Metric>
-        <Metric name="Degrade" value={`${formatMs(degrade.p50_ms)} p50`}>
-          p90 {formatMs(degrade.p90_ms)}
-        </Metric>
-        <Metric name="Render" value={`${formatMs(render.p50_ms)} p50`}>
-          p90 {formatMs(render.p90_ms)} to write both frames
-        </Metric>
+        <StageMetric name="Pre/post-processing" stage={processing} />
+        <StageMetric name="Read" stage={read}>
+          to decode a frame
+        </StageMetric>
+        <StageMetric name="Degrade" stage={degrade} />
+        <StageMetric name="Render" stage={render}>
+          to write both frames
+        </StageMetric>
       </dl>
       <p className="field-note">
         Over {latency.frames} frames; the first {latency.warmup_frames} were warm-up and are left out.
       </p>
     </>
+  );
+}
+
+function StageMetric({ name, stage, children }: { name: string; stage: StageLatency; children?: ReactNode }) {
+  return (
+    <Metric name={name} value={`${formatMs(stage.p50_ms)} p50`}>
+      p90 {formatMs(stage.p90_ms)} {children}
+    </Metric>
   );
 }
