@@ -1,17 +1,19 @@
-"""YOLOX-Nano, pretrained on COCO, run through ONNX Runtime on the CPU.
+"""YOLOX-Nano, pretrained on COCO, run through ONNX Runtime: on a supported accelerated execution provider when
+one is available, else on the CPU, which is always kept as the fallback.
 
 Weights: Megvii's official ONNX export (Apache-2.0), fetched by scripts/fetch_model.py.
 Pre- and post-processing follow YOLOX's own ONNX demo: letterbox to 416 px padded with gray
 (114), raw BGR 0-255 input, then grid decoding, objectness x class score, and per-class NMS.
 """
 
+import time
 from pathlib import Path
 
 import cv2
 import numpy as np
 import onnxruntime as ort
 
-from backend.detection import Box, Detection, ModelInfo, check_input
+from backend.detection import Box, Detection, ModelInfo, TimedDetections, check_input
 
 MODEL_PATH = Path(__file__).resolve().parents[1] / "models" / "yolox_nano.onnx"
 MODEL_URL = "https://github.com/Megvii-BaseDetection/YOLOX/releases/download/0.1.1rc0/yolox_nano.onnx"
@@ -21,6 +23,12 @@ INPUT_SIZE = 416
 STRIDES = (8, 16, 32)
 NMS_IOU = 0.45
 PAD_VALUE = 114
+
+CPU = "CPUExecutionProvider"
+# Accelerated providers used when available, most preferred first. Only ones that run this model's float32 graph
+# as-is: an accelerated provider must not change the detections beyond numeric tolerance (tests/test_yolox_latency.py
+# checks this on machines that have one). Others, such as Azure or CoreML, are not used.
+ACCELERATED = ("CUDAExecutionProvider", "DmlExecutionProvider")
 
 # fmt: off
 COCO_CLASSES = [
@@ -93,19 +101,34 @@ def decode(raw: np.ndarray, ratio: float, width: int, height: int, confidence_th
     return detections
 
 
+def choose_providers(available: list[str]) -> list[str]:
+    """The first supported accelerated provider that is available, if any, then the CPU."""
+    accelerated = [p for p in ACCELERATED if p in available]
+    return accelerated[:1] + [CPU]
+
+
 class YoloxRunner:
-    def __init__(self, model_path: Path):
-        self.session = ort.InferenceSession(str(model_path), providers=["CPUExecutionProvider"])
+    def __init__(self, model_path: Path, providers: list[str] | None = None):
+        providers = providers or choose_providers(ort.get_available_providers())
+        self.session = ort.InferenceSession(str(model_path), providers=providers)
         self.input_name = self.session.get_inputs()[0].name
         self.info = ModelInfo(
             name="YOLOX-Nano (COCO)",
             version=f"0.1.1rc0 sha256:{MODEL_SHA256[:12]}",
-            runtime=f"onnxruntime {ort.__version__} ({self.session.get_providers()[0]})",
+            runtime=f"onnxruntime {ort.__version__}",
+            # The provider the session actually got: one that fails to load is dropped in favour of the next.
+            provider=self.session.get_providers()[0],
+            size_bytes=model_path.stat().st_size,
         )
 
     def detect(self, image: np.ndarray, confidence_threshold: float) -> list[Detection]:
+        return self.detect_timed(image, confidence_threshold).detections
+
+    def detect_timed(self, image: np.ndarray, confidence_threshold: float) -> TimedDetections:
         check_input(image, confidence_threshold)
         tensor, ratio = letterbox(image)
+        start = time.perf_counter()
         raw = self.session.run(None, {self.input_name: tensor})[0][0]
+        inference_s = time.perf_counter() - start
         height, width = image.shape[:2]
-        return decode(raw, ratio, width, height, confidence_threshold)
+        return TimedDetections(decode(raw, ratio, width, height, confidence_threshold), inference_s)

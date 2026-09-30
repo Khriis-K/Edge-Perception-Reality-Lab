@@ -878,7 +878,8 @@ p {
   border-bottom: 0;
 }
 
-.stability-inspector {
+.stability-inspector,
+.latency-inspector {
   display: flex;
   flex-direction: column;
   gap: 12px;
