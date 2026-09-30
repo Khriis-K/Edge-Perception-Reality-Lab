@@ -41,6 +41,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/dataset/subset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Dataset Subset
+         * @description The seeded per-condition subset: its manifest and the counts for the Subset table. With no seed or cap,
+         *     the defaults are used, and the manifest says which.
+         */
+        get: operations["dataset_subset_api_dataset_subset_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/degradations": {
         parameters: {
             query?: never;
@@ -237,6 +258,21 @@ export interface components {
             /** Y2 */
             y2: number;
         };
+        /** ConditionSummary */
+        ConditionSummary: {
+            /** Condition */
+            condition: string;
+            /** Frames */
+            frames: number;
+            /** Low N */
+            low_n: boolean;
+            /** Objects */
+            objects: number;
+            /** Smallest Class */
+            smallest_class: string;
+            /** Smallest Class Count */
+            smallest_class_count: number;
+        };
         /** DatasetPartStatus */
         DatasetPartStatus: {
             /** Checked */
@@ -371,6 +407,19 @@ export interface components {
              */
             status: "queued" | "running" | "completed" | "cancelled" | "failed";
         };
+        /** Manifest */
+        Manifest: {
+            /** Cap */
+            cap: number;
+            /** Frames */
+            frames: {
+                [key: string]: string[];
+            };
+            /** Seed */
+            seed: number;
+            /** Vocabulary Version */
+            vocabulary_version: number;
+        };
         /** ModelInfo */
         ModelInfo: {
             /** Name */
@@ -392,6 +441,24 @@ export interface components {
             degradation: components["schemas"]["DegradationSettings"];
             /** Sample Id */
             sample_id: string;
+        };
+        /** SubsetResponse */
+        SubsetResponse: {
+            /** Conditions */
+            conditions: components["schemas"]["ConditionSummary"][];
+            /** Excluded */
+            excluded: {
+                [key: string]: number;
+            };
+            /** Excluded Total */
+            excluded_total: number;
+            /** Low N Objects */
+            low_n_objects: number;
+            manifest: components["schemas"]["Manifest"];
+            /** Max Cap */
+            max_cap: number;
+            /** Problems */
+            problems: string[];
         };
         /** ValidationError */
         ValidationError: {
@@ -469,6 +536,45 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DatasetStatusResponse"];
+                };
+            };
+        };
+    };
+    dataset_subset_api_dataset_subset_get: {
+        parameters: {
+            query?: {
+                seed?: number;
+                cap?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubsetResponse"];
+                };
+            };
+            /** @description The dataset is not configured or not ready */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

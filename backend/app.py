@@ -1,6 +1,7 @@
 """Application factory: the API plus the built single-page frontend."""
 
 from pathlib import Path
+from threading import Lock
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
@@ -34,6 +35,9 @@ def create_app(
     app.state.jobs = JobManager(runner, cache_dir)
     # Fixed for the app's lifetime: the browser never sends a filesystem path.
     app.state.dataset_root = dataset_root.resolve() if dataset_root else None
+    # Built on first use: reading every label and metadata file of the real dataset takes minutes.
+    app.state.dataset_index = None
+    app.state.dataset_index_lock = Lock()
     app.include_router(router)
     app.add_exception_handler(RequestValidationError, _validation_error)
 

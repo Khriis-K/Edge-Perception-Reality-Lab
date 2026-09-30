@@ -638,3 +638,60 @@ p {
 .dataset-not-needed li::before {
   content: "– ";
 }
+
+/* --- setup: subset --------------------------------------------------------- */
+
+.subset {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.subset-controls {
+  display: flex;
+  gap: 16px;
+}
+
+.subset-controls input {
+  width: 140px;
+}
+
+.subset-table {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.subset-table caption {
+  caption-side: bottom;
+  padding-top: 6px;
+  text-align: left;
+  color: var(--muted);
+}
+
+.subset-table th,
+.subset-table td {
+  padding: 6px 12px 6px 0;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.subset-table thead th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.subset-table td:nth-child(2),
+.subset-table td:nth-child(3) {
+  text-align: right;
+}
+
+.low-n {
+  padding: 0 4px;
+  border: 1px solid var(--warn);
+  border-radius: 2px;
+  color: var(--warn);
+  font-family: var(--mono);
+  font-size: 11px;
+}

@@ -53,14 +53,14 @@ def test_status_without_dataset_still_works(tmp_path):
 
 
 def test_status_is_rechecked_on_every_request(client, root):
-    moved = root.parent / "labeltool_labels.bak"
-    (root / "labeltool_labels").rename(moved)
+    moved = root.parent / "labeltool_labels_refined.bak"
+    (root / "labeltool_labels_refined").rename(moved)
 
     missing = client.get("/api/dataset/status").json()
     assert not missing["ready"]
     assert "metadata" in missing["message"].lower()
 
-    moved.rename(root / "labeltool_labels")
+    moved.rename(root / "labeltool_labels_refined")
     assert client.get("/api/dataset/status").json()["ready"]
 
 
