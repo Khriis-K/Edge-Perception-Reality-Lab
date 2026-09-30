@@ -1,6 +1,7 @@
 import { Switch } from "@blueprintjs/core";
-import { useId, useState } from "react";
-import { frameImageUrl, type Experiment, type FrameVariant } from "./api/client";
+import { useId, useState, type CSSProperties } from "react";
+import { frameImageUrl, type Experiment, type FrameVariant, type StabilityReport } from "./api/client";
+import { instabilityLevels } from "./instability";
 import { detectionLabel, toOverlayRect, visibleDetections, type Detection } from "./overlay";
 
 const DEFAULT_THRESHOLD = 0.25;
@@ -9,9 +10,19 @@ const DEFAULT_THRESHOLD = 0.25;
  * One experiment's clean and degraded frames side by side, with their detections drawn over them.
  * One scrubber drives both panes, so they always show the same frame. Threshold and overlay
  * changes filter the detections already loaded; they never ask the server to run inference again.
+ * The instability strip under the scrubber shades each frame by its worst-frame score.
  */
-export function FrameViewer({ experiment }: { experiment: Experiment }) {
-  const [frameIndex, setFrameIndex] = useState(0);
+export function FrameViewer({
+  experiment,
+  stability,
+  frameIndex,
+  onFrameIndexChange,
+}: {
+  experiment: Experiment;
+  stability: StabilityReport;
+  frameIndex: number;
+  onFrameIndexChange: (index: number) => void;
+}) {
   const [threshold, setThreshold] = useState(Math.max(DEFAULT_THRESHOLD, experiment.confidence_floor));
   const [showOverlays, setShowOverlays] = useState(true);
   const thresholdId = useId();
@@ -69,12 +80,13 @@ export function FrameViewer({ experiment }: { experiment: Experiment }) {
           max={lastFrame}
           step={1}
           value={frameIndex}
-          onChange={(e) => setFrameIndex(Number(e.target.value))}
+          onChange={(e) => onFrameIndexChange(Number(e.target.value))}
         />
         <output htmlFor={frameId}>
           {frameIndex + 1} / {lastFrame + 1}
         </output>
       </div>
+      <InstabilityStrip stability={stability} frameIndex={frameIndex} onSelect={onFrameIndexChange} />
     </section>
   );
 }
@@ -127,5 +139,44 @@ function DetectionOverlay({ name, detections }: { name: string; detections: Dete
         );
       })}
     </svg>
+  );
+}
+
+/**
+ * One mark per frame, darker where the degraded detections differ more from the clean ones.
+ * Clicking a mark moves the scrubber; the scrubber stays the keyboard route, so marks aren't tab stops.
+ */
+function InstabilityStrip({
+  stability,
+  frameIndex,
+  onSelect,
+}: {
+  stability: StabilityReport;
+  frameIndex: number;
+  onSelect: (index: number) => void;
+}) {
+  const levels = instabilityLevels(stability.frames.map((f) => f.score));
+  return (
+    <div className="instability">
+      <div role="group" aria-label="Instability strip" className="instability-strip">
+        {stability.frames.map((frame, i) => {
+          const label = `Frame ${i + 1}: worst-frame score ${frame.score.toFixed(2)}`;
+          return (
+            <button
+              key={frame.index}
+              type="button"
+              tabIndex={-1}
+              aria-label={label}
+              aria-current={i === frameIndex || undefined}
+              title={label}
+              className="instability-mark"
+              style={{ "--level": levels[i] } as CSSProperties}
+              onClick={() => onSelect(i)}
+            />
+          );
+        })}
+      </div>
+      <p className="instability-legend">Instability vs. the clean frames: lighter is steadier, darker is worse.</p>
+    </div>
   );
 }

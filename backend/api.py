@@ -10,6 +10,7 @@ from backend.dataset import DatasetIndex, FrameNotFound, camera_image, check_rea
 from backend.degradations import KINDS, RANDOMIZED, TITLES, DegradationKind, parameters
 from backend.jobs import DegradationSettings, Experiment, FrameVariant, Job, JobManager, JobStatus, NoDetector
 from backend.samples import SAMPLES
+from backend.stability import StabilityReport, stability_report
 from backend.subset import (
     DEFAULT_CAP,
     DEFAULT_SEED,
@@ -174,10 +175,14 @@ def cancel_job(job_id: str, jobs: Jobs) -> JobResponse:
 
 @router.get("/experiments/{experiment_id}")
 def get_experiment(experiment_id: str, jobs: Jobs) -> Experiment:
-    experiment = jobs.experiment(experiment_id)
-    if experiment is None:
-        raise HTTPException(status_code=404, detail="No completed experiment with that id.")
-    return experiment
+    return _known_experiment(jobs.experiment(experiment_id))
+
+
+@router.get("/experiments/{experiment_id}/stability")
+def get_stability(experiment_id: str, jobs: Jobs) -> StabilityReport:
+    """How much the degraded detections differ from the clean ones, frame by frame and over the clip.
+    Stability relative to the clean baseline: the clip has no labels, so this is not accuracy."""
+    return stability_report(_known_experiment(jobs.experiment(experiment_id)).frames)
 
 
 @router.get(
@@ -193,6 +198,12 @@ def get_frame_image(
     if path is None:
         raise HTTPException(status_code=404, detail="No such frame.")
     return FileResponse(path, media_type="image/jpeg")
+
+
+def _known_experiment(experiment: Experiment | None) -> Experiment:
+    if experiment is None:
+        raise HTTPException(status_code=404, detail="No completed experiment with that id.")
+    return experiment
 
 
 def _known_job(job: Job | None) -> Job:

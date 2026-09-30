@@ -1,9 +1,10 @@
 import { Button, HTMLSelect } from "@blueprintjs/core";
 import { useEffect, useState } from "react";
-import { fetchExperiment, fetchSamples, type Experiment, type Job, type SampleVideo } from "./api/client";
+import { fetchSamples, type Job, type SampleVideo } from "./api/client";
 import { isActive, useCurrentJob } from "./CurrentJob";
 import { useDegradationSettings } from "./DegradationSettings";
 import { FrameViewer } from "./FrameViewer";
+import { useSyntheticResults } from "./SyntheticResults";
 
 /**
  * Synthetic screen: pick the sample video and run it with the degradation set in the inspector,
@@ -15,7 +16,7 @@ export function SyntheticRun() {
   const [samples, setSamples] = useState<SampleVideo[]>([]);
   const [sampleId, setSampleId] = useState("");
   const [samplesError, setSamplesError] = useState<string | null>(null);
-  const { experiment, error: resultsError } = useCompletedExperiment(job);
+  const { results, error: resultsError, frameIndex, setFrameIndex } = useSyntheticResults();
   const running = isActive(job);
 
   useEffect(() => {
@@ -62,7 +63,15 @@ export function SyntheticRun() {
           {message}
         </p>
       ))}
-      {experiment && <FrameViewer key={experiment.id} experiment={experiment} />}
+      {results && (
+        <FrameViewer
+          key={results.experiment.id}
+          experiment={results.experiment}
+          stability={results.stability}
+          frameIndex={frameIndex}
+          onFrameIndexChange={setFrameIndex}
+        />
+      )}
     </div>
   );
 }
@@ -77,26 +86,4 @@ function RunStatus({ job }: { job: Job | null }) {
     failed: `Failed. Nothing was saved from this run. ${job.error ?? ""}`,
   }[job.status];
   return <p className="run-status">{text}</p>;
-}
-
-/** The results of the current job once, and only once, it has completed. */
-function useCompletedExperiment(job: Job | null): { experiment: Experiment | null; error: string | null } {
-  const [experiment, setExperiment] = useState<Experiment | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const completedId = job?.status === "completed" ? job.experiment_id : null;
-
-  useEffect(() => {
-    setExperiment(null);
-    setError(null);
-    if (!completedId) return;
-    let cancelled = false;
-    fetchExperiment(completedId)
-      .then((result) => !cancelled && setExperiment(result))
-      .catch((e) => !cancelled && setError(`Could not load the results: ${(e as Error).message}`));
-    return () => {
-      cancelled = true;
-    };
-  }, [completedId]);
-
-  return { experiment, error };
 }

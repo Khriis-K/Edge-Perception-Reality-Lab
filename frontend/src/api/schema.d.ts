@@ -136,6 +136,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/experiments/{experiment_id}/stability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Stability
+         * @description How much the degraded detections differ from the clean ones, frame by frame and over the clip.
+         *     Stability relative to the clean baseline: the clip has no labels, so this is not accuracy.
+         */
+        get: operations["get_stability_api_experiments__experiment_id__stability_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -273,6 +294,22 @@ export interface components {
             /** Smallest Class Count */
             smallest_class_count: number;
         };
+        /** ConfidenceShift */
+        ConfidenceShift: {
+            /** Pairs */
+            pairs: number;
+            /** Value */
+            value: number | null;
+        };
+        /** Count */
+        Count: {
+            /** Count */
+            count: number;
+            /** Rate */
+            rate: number | null;
+            /** Total */
+            total: number;
+        };
         /** DatasetPartStatus */
         DatasetPartStatus: {
             /** Checked */
@@ -369,6 +406,25 @@ export interface components {
             /** Index */
             index: number;
         };
+        /** FrameStability */
+        FrameStability: {
+            /** Class Changes */
+            class_changes: number;
+            /** Confidence Loss */
+            confidence_loss: number;
+            /** Dropped */
+            dropped: number;
+            /** Index */
+            index: number;
+            /** Introduced */
+            introduced: number;
+            /** Matches */
+            matches: components["schemas"]["Match"][];
+            /** Retained */
+            retained: number;
+            /** Score */
+            score: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -420,6 +476,20 @@ export interface components {
             /** Vocabulary Version */
             vocabulary_version: number;
         };
+        /** Match */
+        Match: {
+            clean: components["schemas"]["Detection"] | null;
+            /** Confidence Change */
+            confidence_change?: number | null;
+            degraded: components["schemas"]["Detection"] | null;
+            /** Iou */
+            iou?: number | null;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "retained" | "dropped" | "introduced" | "class_change";
+        };
         /** ModelInfo */
         ModelInfo: {
             /** Name */
@@ -435,6 +505,33 @@ export interface components {
             id: string;
             /** Title */
             title: string;
+        };
+        /** ScoreWeights */
+        ScoreWeights: {
+            /** Class Changes */
+            class_changes: number;
+            /** Confidence Loss */
+            confidence_loss: number;
+            /** Dropped */
+            dropped: number;
+            /** Introduced */
+            introduced: number;
+        };
+        /** StabilityReport */
+        StabilityReport: {
+            class_changes: components["schemas"]["Count"];
+            /** Confidence Threshold */
+            confidence_threshold: number;
+            /** Frames */
+            frames: components["schemas"]["FrameStability"][];
+            /** Frames Evaluated */
+            frames_evaluated: number;
+            introduced: components["schemas"]["Count"];
+            /** Iou Threshold */
+            iou_threshold: number;
+            median_confidence_shift: components["schemas"]["ConfidenceShift"];
+            retention: components["schemas"]["Count"];
+            weights: components["schemas"]["ScoreWeights"];
         };
         /** StartRunRequest */
         StartRunRequest: {
@@ -685,6 +782,37 @@ export interface operations {
                 };
                 content: {
                     "image/jpeg": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_stability_api_experiments__experiment_id__stability_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                experiment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StabilityReport"];
                 };
             };
             /** @description Validation Error */

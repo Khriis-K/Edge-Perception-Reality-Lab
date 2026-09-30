@@ -4,6 +4,9 @@ export type HealthResponse = components["schemas"]["HealthResponse"];
 export type SampleVideo = components["schemas"]["SampleVideo"];
 export type Job = components["schemas"]["JobResponse"];
 export type Experiment = components["schemas"]["Experiment"];
+export type StabilityReport = components["schemas"]["StabilityReport"];
+export type FrameStability = components["schemas"]["FrameStability"];
+export type Match = components["schemas"]["Match"];
 export type Degradation = components["schemas"]["Degradation"];
 export type DegradationSettings = components["schemas"]["DegradationSettings"];
 export type DegradationKind = DegradationSettings["kind"];
@@ -87,6 +90,11 @@ export function cancelJob(jobId: string): Promise<Job> {
 
 export function fetchExperiment(experimentId: string): Promise<Experiment> {
   return request(`/api/experiments/${encodeURIComponent(experimentId)}`);
+}
+
+/** How much the degraded detections differ from the clean ones: stability, not accuracy. */
+export function fetchStability(experimentId: string): Promise<StabilityReport> {
+  return request(`/api/experiments/${encodeURIComponent(experimentId)}/stability`);
 }
 
 export function frameImageUrl(experimentId: string, variant: FrameVariant, frameIndex: number): string {

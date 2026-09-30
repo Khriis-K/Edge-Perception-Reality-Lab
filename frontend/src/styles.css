@@ -38,10 +38,12 @@ p {
 .workbench {
   display: grid;
   grid-template-columns: 52px 250px minmax(0, 1fr) 300px;
-  grid-template-rows: 44px minmax(0, 1fr);
+  /* The dock row is empty (zero height) on screens without a dock. */
+  grid-template-rows: 44px minmax(0, 1fr) auto;
   grid-template-areas:
     "top top top top"
-    "rail explorer work inspector";
+    "rail explorer work inspector"
+    "rail explorer dock inspector";
   height: 100%;
 }
 
@@ -51,7 +53,8 @@ p {
     grid-template-columns: 52px 250px minmax(0, 1fr);
     grid-template-areas:
       "top top top"
-      "rail explorer work";
+      "rail explorer work"
+      "rail explorer dock";
   }
 }
 
@@ -256,6 +259,21 @@ p {
 .inspector {
   grid-area: inspector;
   border-left: 1px solid var(--border);
+  overflow: auto;
+}
+
+.dock {
+  grid-area: dock;
+  display: flex;
+  flex-direction: column;
+  max-height: 240px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.dock-body {
+  overflow: auto;
+  padding: 0 12px 12px;
 }
 
 .panel-header {
@@ -697,4 +715,128 @@ p {
   color: var(--warn);
   font-family: var(--mono);
   font-size: 11px;
+}
+
+/* --- stability: instability strip, match table, inspector metrics ------------ */
+
+/* Darker is worse: each mark mixes from a light, steady tone toward a dark red by its level. */
+.instability-strip {
+  display: flex;
+  height: 18px;
+  padding: 2px;
+  background: #e5e8eb; /* LIGHT_GRAY3: a light track, so dark marks read as dark */
+}
+
+.instability-mark {
+  flex: 1;
+  min-width: 1px;
+  padding: 0;
+  border: 0;
+  background: color-mix(in srgb, #8e292c calc(var(--level) * 100%), #e5e8eb); /* RED1 */
+  cursor: pointer;
+}
+
+/* The current frame: an outline, so it isn't marked by color alone. */
+.instability-mark[aria-current="true"] {
+  outline: 2px solid var(--clean);
+  outline-offset: 1px;
+  position: relative;
+}
+
+.instability-legend {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.match-table,
+.score-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.match-table caption,
+.score-table caption {
+  padding: 8px 0 6px;
+  text-align: left;
+  color: var(--muted);
+}
+
+.match-table th,
+.match-table td,
+.score-table th,
+.score-table td {
+  padding: 4px 12px 4px 0;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.match-table thead th,
+.score-table thead th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.match-table .numeric,
+.score-table .numeric {
+  text-align: right;
+  font-family: var(--mono);
+}
+
+.match-table td:nth-child(2),
+.match-table td:nth-child(3) {
+  font-family: var(--mono);
+}
+
+.score-table tfoot th,
+.score-table tfoot td {
+  font-weight: 600;
+  border-bottom: 0;
+}
+
+.stability-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.metrics {
+  margin: 0;
+}
+
+.metrics div {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.metrics dt {
+  color: var(--muted);
+}
+
+.metrics dd {
+  margin: 0;
+}
+
+.metric-value {
+  font-family: var(--mono);
+  font-weight: 600;
+}
+
+.metric-counts {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.inspector-subheading {
+  margin: 0 0 4px;
+  font-size: 12px;
+}
+
+.worst-frames ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
