@@ -4,6 +4,7 @@ import { Navigate, useParams } from "react-router";
 import { DatasetSetup } from "./DatasetSetup";
 import { DegradationInspector } from "./DegradationSettings";
 import { Rail } from "./Rail";
+import { MatchTable, StabilityInspector } from "./Stability";
 import { SyntheticRun } from "./SyntheticRun";
 import { findSection, type Section } from "./sections";
 import { TopBar } from "./TopBar";
@@ -31,6 +32,7 @@ export function Workbench() {
       <Rail />
       <Explorer section={section} />
       <WorkArea section={section} />
+      {section.id === "synthetic" && <Dock />}
       {wide ? (
         <InspectorPanel>{inspector}</InspectorPanel>
       ) : (
@@ -63,6 +65,18 @@ function WorkArea({ section }: { section: Section }) {
   );
 }
 
+/** Below the work area on screens that tabulate data. */
+function Dock() {
+  return (
+    <section aria-label="Dock" className="dock">
+      <h2 className="panel-header">Match table</h2>
+      <div className="dock-body">
+        <MatchTable />
+      </div>
+    </section>
+  );
+}
+
 function Overview({ section }: { section: Section }) {
   return (
     <div className="work-body">
@@ -80,7 +94,13 @@ function Overview({ section }: { section: Section }) {
 
 /** What the inspector shows; rendered once, inside either the panel or the drawer. */
 function InspectorContent({ section }: { section: Section }) {
-  if (section.id === "synthetic") return <DegradationInspector />;
+  if (section.id === "synthetic")
+    return (
+      <>
+        <DegradationInspector />
+        <StabilityInspector />
+      </>
+    );
   return <p className="empty-state">Select something to see its details.</p>;
 }
 
