@@ -4,6 +4,7 @@ import { Navigate, useParams } from "react-router";
 import { DatasetSetup } from "./DatasetSetup";
 import { DegradationInspector } from "./DegradationSettings";
 import { Rail } from "./Rail";
+import { SetupExplorer, SyntheticExplorer } from "./RunHistory";
 import { MatchTable, StabilityInspector } from "./Stability";
 import { SyntheticRun } from "./SyntheticRun";
 import { findSection, type Section } from "./sections";
@@ -48,7 +49,13 @@ function Explorer({ section }: { section: Section }) {
   return (
     <aside aria-label="Explorer" className="panel explorer">
       <h2 className="panel-header">{section.explorerTitle}</h2>
-      <p className="empty-state">{section.explorerEmpty}</p>
+      {section.id === "setup" ? (
+        <SetupExplorer empty={section.explorerEmpty} />
+      ) : section.id === "synthetic" ? (
+        <SyntheticExplorer empty={section.explorerEmpty} />
+      ) : (
+        <p className="empty-state">{section.explorerEmpty}</p>
+      )}
     </aside>
   );
 }

@@ -78,13 +78,15 @@ def test_clean_and_degraded_images_are_served_for_the_same_frame_at_the_same_siz
     assert degraded.mean() < 0.5 * clean.mean()
 
 
-def test_the_same_seed_reproduces_the_degraded_frames_and_another_seed_does_not(client):
+def test_the_same_seed_reproduces_the_degraded_frames_and_another_seed_does_not(client, tmp_path):
     noise = {"kind": "noise", "severity": 0.5}
     first = run(client, {**noise, "seed": 11})
-    again = run(client, {**noise, "seed": 11})
+    # On its own cache folder, so the identical run really runs again instead of reusing the cached one.
+    fresh = TestClient(create_app(static_dir=tmp_path / "no-dist", runner=StubRunner(), cache_dir=tmp_path / "cache-2"))
+    again = run(fresh, {**noise, "seed": 11})
     other = run(client, {**noise, "seed": 12})
 
-    np.testing.assert_array_equal(frame_image(client, first, "degraded", 5), frame_image(client, again, "degraded", 5))
+    np.testing.assert_array_equal(frame_image(client, first, "degraded", 5), frame_image(fresh, again, "degraded", 5))
     assert not np.array_equal(frame_image(client, first, "degraded", 5), frame_image(client, other, "degraded", 5))
     # Each frame gets its own noise, not one pattern repeated on every frame.
     assert not np.array_equal(

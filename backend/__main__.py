@@ -7,7 +7,7 @@ from pathlib import Path
 
 import uvicorn
 
-from backend.app import create_app
+from backend.app import DEFAULT_CACHE_DIR, create_app
 from backend.dataset import DATASET_ENV_VAR
 from backend.detection import ModelRunner
 from backend.stub_runner import StubRunner
@@ -40,6 +40,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=os.environ.get(DATASET_ENV_VAR) or None,
         help=f"local SeeingThroughFog folder (default: ${DATASET_ENV_VAR}; optional, Synthetic mode works without it)",
     )
+    parser.add_argument(
+        "--cache-dir",
+        type=Path,
+        default=DEFAULT_CACHE_DIR,
+        help="where finished runs are kept (default: cache/ in the repo; safe to delete)",
+    )
     return parser
 
 
@@ -60,7 +66,8 @@ def build_runner(kind: str, model_path: Path) -> ModelRunner | None:
 def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
     runner = build_runner(args.runner, MODEL_PATH)
-    uvicorn.run(create_app(dev=args.dev, runner=runner, dataset_root=args.dataset), host=HOST, port=args.port)
+    app = create_app(dev=args.dev, runner=runner, dataset_root=args.dataset, cache_dir=args.cache_dir)
+    uvicorn.run(app, host=HOST, port=args.port)
 
 
 if __name__ == "__main__":

@@ -28,7 +28,7 @@ from typing import Literal, get_args
 from pydantic import BaseModel
 
 from backend.detection import Box, Detection
-from backend.jobs import FrameResult
+from backend.experiment import FrameResult
 from backend.subset import LOW_N_OBJECTS
 
 # Fixed, so the metrics don't move with the viewer's display threshold. The raw detections go

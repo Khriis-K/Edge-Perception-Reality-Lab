@@ -22,6 +22,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/cache": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cache Info
+         * @description The cache folder and how much it holds. Shown so it can be found and deleted; it is never set from here.
+         */
+        get: operations["cache_info_api_cache_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/dataset/frames/{sample_id}": {
         parameters: {
             query?: never;
@@ -120,6 +140,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/experiments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Experiments
+         * @description Every cached run, newest first, read from the cache folder.
+         */
+        get: operations["list_experiments_api_experiments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/experiments/{experiment_id}": {
         parameters: {
             query?: never;
@@ -204,8 +244,31 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Start Run */
+        /**
+         * Start Run
+         * @description Start a run, or reuse its cached results ("cached, results reused") if identical settings already ran.
+         */
         post: operations["start_run_api_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Run
+         * @description Whether this exact run request would reuse cached results or start a new job. Starts nothing.
+         */
+        post: operations["preview_run_api_jobs_preview_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -299,6 +362,13 @@ export interface components {
             y1: number;
             /** Y2 */
             y2: number;
+        };
+        /** CacheInfo */
+        CacheInfo: {
+            /** Folder */
+            folder: string;
+            /** Size Bytes */
+            size_bytes: number;
         };
         /** ClassMapping */
         ClassMapping: {
@@ -435,6 +505,27 @@ export interface components {
             /** Sample Id */
             sample_id: string;
         };
+        /**
+         * ExperimentSummary
+         * @description A cached run, for the run history. The frames themselves come from the experiment.
+         */
+        ExperimentSummary: {
+            degradation: components["schemas"]["AppliedDegradation"];
+            /** Frame Count */
+            frame_count: number;
+            /** Id */
+            id: string;
+            model: components["schemas"]["ModelInfo"];
+            /** Sample Id */
+            sample_id: string;
+            /** Sample Title */
+            sample_title: string;
+            /**
+             * Saved At
+             * Format: date-time
+             */
+            saved_at: string;
+        };
         /** FrameResult */
         FrameResult: {
             /** Clean */
@@ -478,6 +569,8 @@ export interface components {
         };
         /** JobResponse */
         JobResponse: {
+            /** Cached */
+            cached: boolean;
             /** Error */
             error: string | null;
             /** Experiment Id */
@@ -543,6 +636,16 @@ export interface components {
             runtime: string;
             /** Version */
             version: string;
+        };
+        /**
+         * RunPreview
+         * @description What starting this run would do: reuse cached results, or start a new job.
+         */
+        RunPreview: {
+            /** Cached */
+            cached: boolean;
+            /** Experiment Id */
+            experiment_id: string;
         };
         /** SampleVideo */
         SampleVideo: {
@@ -642,6 +745,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ClassMapping"];
+                };
+            };
+        };
+    };
+    cache_info_api_cache_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CacheInfo"];
                 };
             };
         };
@@ -798,6 +921,26 @@ export interface operations {
             };
         };
     };
+    list_experiments_api_experiments_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentSummary"][];
+                };
+            };
+        };
+    };
     get_experiment_api_experiments__experiment_id__get: {
         parameters: {
             query?: never;
@@ -926,6 +1069,13 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Cached: the results were reused */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Successful Response */
             202: {
                 headers: {
@@ -933,6 +1083,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_run_api_jobs_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartRunRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunPreview"];
                 };
             };
             /** @description Validation Error */

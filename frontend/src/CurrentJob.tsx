@@ -5,6 +5,9 @@ const POLL_MS = 250;
 
 export const isActive = (job: Job | null): job is Job => job?.status === "queued" || job?.status === "running";
 
+/** The job's id once it has completed, else null: a dependency that changes exactly when a run finishes. */
+export const completedJobId = (job: Job | null): string | null => (job?.status === "completed" ? job.id : null);
+
 interface CurrentJob {
   job: Job | null;
   /** Why starting or polling failed, in plain language. */

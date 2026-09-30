@@ -1,15 +1,18 @@
 """HTTP API routes. Pydantic models here define the OpenAPI schema the frontend types come from."""
 
+from datetime import datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from backend.class_mapping import CLASS_MAPPING, ClassMapping
 from backend.dataset import DatasetIndex, FrameNotFound, camera_image, check_readiness, index_dataset
 from backend.degradations import KINDS, RANDOMIZED, TITLES, DegradationKind, parameters
-from backend.jobs import DegradationSettings, Experiment, FrameVariant, Job, JobManager, JobStatus, NoDetector
+from backend.detection import ModelInfo
+from backend.experiment import AppliedDegradation, DegradationSettings, Experiment, FrameVariant
+from backend.jobs import Job, JobManager, JobStatus, NoDetector
 from backend.samples import SAMPLES
 from backend.stability import StabilityReport, stability_report
 from backend.subset import (
@@ -78,6 +81,8 @@ class JobResponse(BaseModel):
     frames_total: int
     progress: float
     error: str | None
+    # True when the run's results were already cached: nothing ran, and the job is completed from the start.
+    cached: bool
 
     @classmethod
     def of(cls, job: Job) -> "JobResponse":
@@ -97,7 +102,32 @@ class JobResponse(BaseModel):
             frames_total=job.frames_total,
             progress=progress,
             error=job.error,
+            cached=job.cached,
         )
+
+
+class RunPreview(BaseModel):
+    """What starting this run would do: reuse cached results, or start a new job."""
+
+    experiment_id: str
+    cached: bool
+
+
+class ExperimentSummary(BaseModel):
+    """A cached run, for the run history. The frames themselves come from the experiment."""
+
+    id: str
+    sample_id: str
+    sample_title: str
+    degradation: AppliedDegradation
+    model: ModelInfo
+    frame_count: int
+    saved_at: datetime
+
+
+class CacheInfo(BaseModel):
+    folder: str
+    size_bytes: int
 
 
 class DatasetPartStatus(BaseModel):
@@ -156,12 +186,26 @@ def degradation_parameters(
     return parameters(kind, severity)
 
 
-@router.post("/jobs", status_code=202)
-def start_run(body: StartRunRequest, jobs: Jobs) -> JobResponse:
+@router.post("/jobs", status_code=202, responses={200: {"description": "Cached: the results were reused"}})
+def start_run(body: StartRunRequest, jobs: Jobs, response: Response) -> JobResponse:
+    """Start a run, or reuse its cached results ("cached, results reused") if identical settings already ran."""
     try:
-        return JobResponse.of(jobs.start(SAMPLES[body.sample_id], body.degradation))
+        job = jobs.start(SAMPLES[body.sample_id], body.degradation)
     except NoDetector:
         raise HTTPException(status_code=503, detail=NO_MODEL_MESSAGE)
+    if job.cached:
+        response.status_code = 200
+    return JobResponse.of(job)
+
+
+@router.post("/jobs/preview")
+def preview_run(body: StartRunRequest, jobs: Jobs) -> RunPreview:
+    """Whether this exact run request would reuse cached results or start a new job. Starts nothing."""
+    try:
+        experiment_id = jobs.experiment_id_for(SAMPLES[body.sample_id], body.degradation)
+    except NoDetector:
+        raise HTTPException(status_code=503, detail=NO_MODEL_MESSAGE)
+    return RunPreview(experiment_id=experiment_id, cached=jobs.is_cached(experiment_id))
 
 
 @router.get("/jobs/{job_id}")
@@ -172,6 +216,33 @@ def get_job(job_id: str, jobs: Jobs) -> JobResponse:
 @router.post("/jobs/{job_id}/cancel")
 def cancel_job(job_id: str, jobs: Jobs) -> JobResponse:
     return JobResponse.of(_known_job(jobs.cancel(job_id)))
+
+
+@router.get("/experiments")
+def list_experiments(jobs: Jobs) -> list[ExperimentSummary]:
+    """Every cached run, newest first, read from the cache folder."""
+    summaries = []
+    for entry in jobs.cache.entries():
+        experiment = entry.experiment
+        sample = SAMPLES.get(experiment.sample_id)
+        summaries.append(
+            ExperimentSummary(
+                id=experiment.id,
+                sample_id=experiment.sample_id,
+                sample_title=sample.title if sample else experiment.sample_id,
+                degradation=experiment.degradation,
+                model=experiment.model,
+                frame_count=len(experiment.frames),
+                saved_at=entry.saved_at,
+            )
+        )
+    return summaries
+
+
+@router.get("/cache")
+def cache_info(jobs: Jobs) -> CacheInfo:
+    """The cache folder and how much it holds. Shown so it can be found and deleted; it is never set from here."""
+    return CacheInfo(folder=str(jobs.cache.root.resolve()), size_bytes=jobs.cache.size_bytes())
 
 
 @router.get("/experiments/{experiment_id}")
