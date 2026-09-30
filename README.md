@@ -38,25 +38,24 @@ npm run build
 
 Synthetic mode works without it. For Benchmark mode, download SeeingThroughFog from its official source ([repository](https://github.com/princeton-computational-imaging/SeeingThroughFog); registration required) and keep it outside this repo.
 
-1. Verify the downloaded archives against the published checksums:
+1. Download only the three parts the app reads. Everything else (lidar, radar, gated, thermal, raw camera, road friction, weather station) can be skipped. Each part is its own archive. The camera images are split: `cam_stereo_left_lut/cam_stereo_left_lut.z01`…`.z23` plus `cam_stereo_left_lut.zip`. The labels and metadata are single zips: `gt_labels/cam_left_labels_TMP.zip` and `labeltool_labels/labeltool_labels_refined.zip`.
 
-   ```
-   .venv/Scripts/python.exe -m backend.checksums PATH/TO/ARCHIVES
-   ```
+2. Check the download. Upstream publishes no checksums for these per-folder archives (their `SeeingThroughFog_sha256sum.txt` covers a combined archive the download doesn't contain). Zip stores a CRC32 for every file, so a corrupt download fails at extraction:
 
-   It prints PASS, FAIL or MISSING per archive and exits non-zero unless all pass.
+   - Make sure every split part, `.z01`…`.zNN`, sits next to its `.zip`. A missing part stops extraction partway.
+   - Extraction must finish with no CRC errors. If 7-Zip reports one, download that archive again.
 
-2. Extraction has two stages. First join and unpack the split archive with `7z x SeeingThroughFogCompressed.zip` (7-Zip reads the `.z01`�`.z18` parts automatically). That gives one zip per sensor folder. Then extract only the three parts the app reads. Everything else (lidar, radar, gated, thermal, raw camera, road friction, weather station) can be skipped:
+3. Extract each archive with `7z x ARCHIVE.zip -oDEST`, for example `7z x cam_stereo_left_lut/cam_stereo_left_lut.zip -oD:/data/SeeingThroughFog`. 7-Zip reads the `.z01`…`.zNN` parts automatically. The app expects the folders below under the dataset root. List an archive with `7z l` first, and pick `DEST` so its contents land at that path. Setup reports any part it can't find.
 
    | Part | Folder |
    | --- | --- |
    | 8-bit tone-mapped left camera images | `cam_stereo_left_lut` |
    | Ground-truth labels (KITTI format) | `gt_labels/cam_left_labels_TMP` |
-   | Refined environment metadata (fog, precipitation, daytime) | `labeltool_labels_refined` (ships as a zip; extract it) |
+   | Refined environment metadata (fog, precipitation, daytime) | `labeltool_labels_refined` |
 
    The original `labeltool_labels` isn't needed; the app reads the refined metadata.
 
-3. Start the app with the folder. It is set only at startup, never from the browser:
+4. Start the app with the folder. It is set only at startup, never from the browser:
 
    ```
    .venv/Scripts/python.exe -m backend --dataset D:/data/SeeingThroughFog
