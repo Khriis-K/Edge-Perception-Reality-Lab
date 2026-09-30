@@ -171,10 +171,10 @@ function ClassTable({ condition, threshold, lowN }: { condition: ConditionResult
 
 /** Benchmark's explorer: every condition in the run's manifest with its mAP, then the manifest and model. */
 export function BenchmarkExplorer({ empty }: { empty: string }) {
-  const { results, error, selected, select } = useBenchmarkResults();
+  const { results, selected, select } = useBenchmarkResults();
 
-  // A load error is shown in the work area, beside the run that caused it.
-  if (error || !results) return <p className="empty-state">{empty}</p>;
+  // A load error is shown in the work area; results already loaded stay listed beside it.
+  if (!results) return <p className="empty-state">{empty}</p>;
   const { manifest, model } = results;
   return (
     <div className="run-explorer">

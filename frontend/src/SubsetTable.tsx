@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import { fetchSubset, type ConditionSummary, type Manifest, type Subset } from "./api/client";
 import { conditionName } from "./benchmarkFormat";
-import { useSubsetChoice, type SubsetChoice as Choice } from "./SubsetChoice";
+import { useSubsetChoice, type SubsetChoice } from "./SubsetChoice";
 
 /**
  * The seeded subset: up to `cap` frames per condition, drawn with `seed`. Shows per condition how many frames and
@@ -36,7 +36,8 @@ export function SubsetTable({ ready }: { ready: boolean }) {
   );
 }
 
-function Controls({ subset, choice, onChange }: { subset: Subset; choice: Choice; onChange: (choice: Choice) => void }) {
+function Controls(props: { subset: Subset; choice: SubsetChoice; onChange: (choice: SubsetChoice) => void }) {
+  const { subset, choice, onChange } = props;
   const { seed, cap } = choice ?? subset.manifest;
   const ids = { seed: useId(), cap: useId() };
 
@@ -161,7 +162,7 @@ function ManifestLink({ manifest }: { manifest: Manifest }) {
 }
 
 /** The subset drawn with the choice, once the dataset is ready. */
-export function useSubset(ready: boolean, choice: Choice) {
+export function useSubset(ready: boolean, choice: SubsetChoice) {
   const [subset, setSubset] = useState<Subset | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);

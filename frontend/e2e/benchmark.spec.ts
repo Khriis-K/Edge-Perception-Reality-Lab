@@ -1,10 +1,10 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { FIXTURE_PORT } from "../playwright.config";
+import { BENCHMARK_PORT } from "../playwright.config";
 
-// On the fixture dataset with the stub runner. The stub finds the bright car the fixture draws in clear-day,
-// fog-night and rain-night; everything else is missed. No other spec runs a benchmark, so the cache is this file's.
-test.use({ baseURL: `http://127.0.0.1:${FIXTURE_PORT}` });
+// On the fixture dataset with the stub runner, on a server of this file's own (see playwright.config.ts). The stub
+// finds the bright car the fixture draws in clear-day, fog-night and rain-night; everything else is missed.
+test.use({ baseURL: `http://127.0.0.1:${BENCHMARK_PORT}` });
 
 const explorer = (page: Page) => page.getByRole("complementary", { name: "Explorer" });
 const tree = (page: Page) => explorer(page).getByRole("list", { name: "Conditions" });
