@@ -9,7 +9,7 @@ import time
 
 import numpy as np
 
-from backend.detection import Box, Detection, ModelInfo, check_input
+from backend.detection import Box, Detection, ModelInfo, TimedDetections, check_input
 
 BRIGHT = 200  # the sample's car is drawn at 240; road and background are far darker
 
@@ -19,6 +19,12 @@ class StubRunner:
         # Latency lets the browser tests watch a job make progress; unit tests leave it at 0.
         self.simulated_latency_s = simulated_latency_s
         self.info = ModelInfo(name="Stub detector", version="fixture-1", runtime="none (deterministic stub)")
+
+    def detect_timed(self, image: np.ndarray, confidence_threshold: float) -> TimedDetections:
+        """With no model session, the whole detect call counts as inference."""
+        start = time.perf_counter()
+        detections = self.detect(image, confidence_threshold)
+        return TimedDetections(detections, time.perf_counter() - start)
 
     def detect(self, image: np.ndarray, confidence_threshold: float) -> list[Detection]:
         check_input(image, confidence_threshold)

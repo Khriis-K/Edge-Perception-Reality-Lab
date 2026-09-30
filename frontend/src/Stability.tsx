@@ -116,7 +116,7 @@ function ClipMetrics({ stability }: { stability: StabilityReport }) {
 
 type MetricProps = { name: string; value: string; lowN?: boolean; children: ReactNode };
 
-function Metric({ name, value, lowN = false, children }: MetricProps) {
+export function Metric({ name, value, lowN = false, children }: MetricProps) {
   return (
     <div>
       <dt>{name}</dt>
