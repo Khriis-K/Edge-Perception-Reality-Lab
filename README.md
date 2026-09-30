@@ -25,7 +25,7 @@ Python 3.12+ and Node.js 20+.
 
 ```
 py -m venv .venv
-.venv/Scripts/pip.exe install -e ".[dev]"
+.venv/Scripts/pip.exe install -e ".[dev,cpu]"
 .venv/Scripts/python.exe scripts/fetch_model.py   # detector weights into models/, SHA-256 checked
 cd frontend
 npm install
@@ -33,6 +33,8 @@ npm run build
 ```
 
 (On macOS/Linux use `.venv/bin/python` and `.venv/bin/pip`.)
+
+**NVIDIA GPU:** install `".[dev,gpu]"` instead of `".[dev,cpu]"`. The detector then runs on CUDA, and the Latency panel shows `CUDAExecutionProvider`. Choose one: both builds install the same `onnxruntime` package. To switch an existing venv, first run `pip uninstall -y onnxruntime onnxruntime-gpu`.
 
 ## Connect the SeeingThroughFog dataset (optional)
 

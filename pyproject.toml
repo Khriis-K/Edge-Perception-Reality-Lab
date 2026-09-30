@@ -8,10 +8,12 @@ dependencies = [
     "uvicorn[standard]>=0.54",
     "numpy>=2.5",
     "opencv-python-headless>=5.0",
-    "onnxruntime>=1.30",
 ]
 
 [project.optional-dependencies]
+# Pick one ONNX Runtime build. Both install the same `onnxruntime` package, so installing one over the other breaks it.
+cpu = ["onnxruntime>=1.30"]
+gpu = ["onnxruntime-gpu[cuda,cudnn]>=1.30"]
 dev = [
     "pytest>=9.1",
     "httpx>=0.28",
