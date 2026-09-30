@@ -46,6 +46,9 @@ def outcomes(matches):
 IOU_ONE_THIRD = 0.1  # no match
 IOU_HALF = 0.2 / 3  # exactly the threshold
 IOU_0_6 = 0.05
+# The same shift leaves (0.2 - d) / 0.2 of the prediction inside the original box.
+HALF_INSIDE = 0.1
+QUARTER_INSIDE = 0.15
 
 # --- matching ---------------------------------------------------------------
 
@@ -95,9 +98,25 @@ MATCH_CASES = {
         [("ignored", "Pedestrian", "Pedestrian_is_group")],
     ),
     "an ignore region nobody predicted on is neither hit nor miss": ([], [gt("Vehicle")], []),
-    "too little overlap with an ignore region is still a false alarm": (
-        [det("PassengerCar", box=shifted(LEFT, IOU_ONE_THIRD))],
+    # Ignore regions forgive by the share of the prediction inside them, not IoU (see backend/benchmark.py).
+    "a prediction exactly half inside an ignore region is ignored": (
+        [det("PassengerCar", box=shifted(LEFT, HALF_INSIDE))],
         [gt("Vehicle")],
+        [("ignored", "PassengerCar", "Vehicle")],
+    ),
+    "a prediction mostly outside an ignore region is still a false alarm": (
+        [det("PassengerCar", box=shifted(LEFT, QUARTER_INSIDE))],
+        [gt("Vehicle")],
+        [("false_alarm", "PassengerCar", None)],
+    ),
+    "one person inside a large group box is ignored, though their IoU is small": (
+        [det("Pedestrian", box=(0.1, 0.1, 0.2, 0.3))],
+        [gt("Pedestrian_is_group", (0.0, 0.0, 0.6, 0.6))],
+        [("ignored", "Pedestrian", "Pedestrian_is_group")],
+    ),
+    "a prediction much larger than a small ignore region is a false alarm": (
+        [det("PassengerCar", box=(0.0, 0.0, 0.6, 0.6))],
+        [gt("DontCare", (0.1, 0.1, 0.2, 0.2))],
         [("false_alarm", "PassengerCar", None)],
     ),
     "one ignore region forgives several predictions": (
@@ -377,3 +396,9 @@ def test_the_result_records_its_settings():
 def test_display_threshold_must_be_in_range(threshold):
     with pytest.raises(ValueError):
         evaluate_condition([], display_threshold=threshold)
+
+
+def test_an_empty_prediction_box_is_never_inside_a_region():
+    matches = match_frame([det("PassengerCar", box=(0.2, 0.2, 0.2, 0.3))], [gt("DontCare")])
+
+    assert outcomes(matches) == Counter([("false_alarm", "PassengerCar", None)])

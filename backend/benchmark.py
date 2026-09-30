@@ -5,8 +5,9 @@ Boxes are in 0-1 image coordinates on both sides. Matching, per frame, with pred
 classes, each pass taking predictions in descending confidence:
 1. Hit: the prediction takes the unmatched object of its own class it overlaps most, at IoU >= IOU_THRESHOLD.
 2. Class confusion: a prediction left over takes, the same way, an unmatched object of another class.
-3. Ignored: a prediction still left over that overlaps an ignore region at IoU >= IOU_THRESHOLD. One region can
-   forgive any number of predictions.
+3. Ignored: a prediction still left over with at least IGNORE_SHARE of its area inside an ignore region. Share, not
+   IoU, so one person inside a large *_is_group box is forgiven (the COCO crowd rule). One region can forgive any
+   number of predictions.
 4. False alarm: any other prediction. Objects still unmatched are misses.
 Hits come first, so a correct prediction is never shadowed by a more confident wrong-class one on the same object.
 
@@ -26,19 +27,20 @@ is flagged low n below LOW_N_OBJECTS objects.
 """
 
 import math
+from collections.abc import Callable
 from itertools import groupby
 from typing import Literal, get_args
 
 from pydantic import BaseModel
 
-from backend.class_mapping import map_detections, truth_role
+from backend.class_mapping import IGNORE_SHARE, map_detections, truth_role
 from backend.detection import Box, Detection
 from backend.labels import MAIN_CLASSES
 from backend.stability import iou
 from backend.subset import LOW_N_OBJECTS
 
 IOU_THRESHOLD = 0.5
-IOU_SLACK = 1e-9  # float slack, so an overlap of exactly the threshold counts
+SLACK = 1e-9  # float slack, so an overlap of exactly a threshold counts
 
 Outcome = Literal["hit", "miss", "false_alarm", "class_confusion", "ignored"]
 
@@ -67,7 +69,7 @@ class BenchmarkMatch(BaseModel):
     outcome: Outcome
     prediction: Detection | None  # labelled with its dataset class
     truth: GroundTruth | None  # the ignore region, for an ignored prediction
-    iou: float | None = None  # for a spatial match: hit, class confusion or ignored
+    iou: float | None = None  # for a spatial match: hit, class confusion or ignored (though IoU doesn't decide that)
 
 
 class FrameBenchmark(BaseModel):
@@ -126,9 +128,8 @@ def match_frame(predictions: list[Detection], truths: list[GroundTruth]) -> list
         for i in order:
             if i in matched:
                 continue
-            best = _best_overlap(
-                predictions[i].box, [(j, objects[j]) for j in free if (objects[j].label == predictions[i].label) == same_class]
-            )
+            candidates = [(j, objects[j]) for j in free if (objects[j].label == predictions[i].label) == same_class]
+            best = _best_overlap(predictions[i].box, candidates, iou, IOU_THRESHOLD)
             if best is not None:
                 j, overlap = best
                 free.remove(j)
@@ -137,23 +138,36 @@ def match_frame(predictions: list[Detection], truths: list[GroundTruth]) -> list
     for i in order:
         if i in matched:
             continue
-        best = _best_overlap(predictions[i].box, list(enumerate(regions)))
+        best = _best_overlap(predictions[i].box, list(enumerate(regions)), share_inside, IGNORE_SHARE)
         if best is None:
             matched[i] = BenchmarkMatch(outcome="false_alarm", prediction=predictions[i], truth=None)
         else:
-            j, overlap = best
+            j, _ = best
+            overlap = iou(predictions[i].box, regions[j].box)
             matched[i] = BenchmarkMatch(outcome="ignored", prediction=predictions[i], truth=regions[j], iou=overlap)
 
     misses = [BenchmarkMatch(outcome="miss", prediction=None, truth=objects[j]) for j in sorted(free)]
     return [matched[i] for i in order] + misses
 
 
-def _best_overlap(box: Box, candidates: list[tuple[int, GroundTruth]]) -> tuple[int, float] | None:
-    """The candidate overlapping `box` most at or above the threshold; the lowest index breaks ties."""
+def share_inside(prediction: Box, region: Box) -> float:
+    """The fraction of the prediction's area that lies inside the region. 0 for an empty prediction."""
+    width = min(prediction.x2, region.x2) - max(prediction.x1, region.x1)
+    height = min(prediction.y2, region.y2) - max(prediction.y1, region.y1)
+    area = (prediction.x2 - prediction.x1) * (prediction.y2 - prediction.y1)
+    if width <= 0 or height <= 0 or area <= 0:
+        return 0.0
+    return width * height / area
+
+
+def _best_overlap(
+    box: Box, candidates: list[tuple[int, GroundTruth]], measure: Callable[[Box, Box], float], threshold: float
+) -> tuple[int, float] | None:
+    """The candidate `box` overlaps most by `measure`, at or above the threshold; the lowest index breaks ties."""
     best = None
     for j, truth in candidates:
-        overlap = iou(box, truth.box)
-        if overlap >= IOU_THRESHOLD - IOU_SLACK and (best is None or (overlap, -j) > (best[1], -best[0])):
+        overlap = measure(box, truth.box)
+        if overlap >= threshold - SLACK and (best is None or (overlap, -j) > (best[1], -best[0])):
             best = (j, overlap)
     return best
 

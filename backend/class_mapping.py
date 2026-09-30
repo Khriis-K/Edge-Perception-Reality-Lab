@@ -15,8 +15,8 @@ Pedestrian is generic category detection only: no identity, attribute, facial or
 Ground-truth labels play one of three roles:
 - object: one of the four main classes, scored as a hit or a miss;
 - ignore region: the fallback classes Vehicle and Obstacle (the annotator could not tell the type), DontCare, and
-  every *_is_group crowd box. They count as neither hits nor misses, and a prediction overlapping one at the matching
-  IoU threshold is not a false alarm;
+  every *_is_group crowd box. They count as neither hits nor misses, and a prediction with at least half its area
+  inside one is not a false alarm;
 - excluded: anything else (a stray `person` or `train` in the real labels). It is dropped, like an unmapped class.
 
 Changing the mapping or the ignore rule changes the metrics, so bump CLASS_MAPPING_VERSION with it.
@@ -42,11 +42,12 @@ COCO_TO_DATASET = {
 
 IGNORE_CLASSES = ("Vehicle", "Obstacle", "DontCare")
 GROUP_SUFFIX = "_is_group"
+IGNORE_SHARE = 0.5  # of a prediction's area inside an ignore region, for it to be forgiven
 
 IGNORE_RULE = (
     "Objects labelled Vehicle or Obstacle (the dataset's fallback classes), DontCare, or a *_is_group crowd box are "
-    "ignore regions: they count as neither hits nor misses, and a prediction overlapping one at the matching IoU "
-    "threshold is not a false alarm."
+    "ignore regions: they count as neither hits nor misses, and a prediction with at least half its area inside one "
+    "is not a false alarm."
 )
 UNMAPPED_RULE = "COCO classes with no counterpart are excluded from benchmark metrics but kept in the raw detections."
 
