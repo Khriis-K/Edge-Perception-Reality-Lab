@@ -196,6 +196,15 @@ def test_worst_frame_score_adds_each_weighted_contribution():
     assert report.weights == WEIGHTS
 
 
+def test_a_class_change_also_adds_the_confidence_it_lost():
+    report = stability_report([frame(0, [det("car", 0.9)], [det("truck", 0.4)])])
+
+    [scored] = report.frames
+    assert scored.class_changes == 1
+    assert scored.confidence_loss == pytest.approx(0.5)
+    assert scored.score == pytest.approx(1.5)
+
+
 def test_a_confidence_gain_is_not_a_loss():
     report = stability_report([frame(0, [det("car", 0.6)], [det("car", 0.9)])])
 

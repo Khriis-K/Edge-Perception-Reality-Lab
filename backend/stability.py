@@ -12,7 +12,8 @@ degraded = retained + class changes + introduced.
 
 Worst-frame score, per frame:
     dropped x 1 + introduced x 1 + class changes x 1 + confidence loss x 1
-where confidence loss is the total confidence that retained detections lost (gains count as 0).
+where confidence loss is the total confidence that spatially matched detections (retained or
+class-changed) lost; gains count as 0. Dropped detections add nothing to it: they are already counted.
 Each unit is one detection's worth: losing a full 1.0 of confidence weighs as much as one drop.
 """
 
@@ -128,7 +129,7 @@ def frame_stability(result: FrameResult) -> FrameStability:
 
     matches = match_frame(confident(result.clean), confident(result.degraded))
     count = {outcome: sum(m.outcome == outcome for m in matches) for outcome in get_args(Outcome)}
-    loss = sum(max(-m.confidence_change, 0.0) for m in matches if m.outcome == "retained")
+    loss = sum(max(-m.confidence_change, 0.0) for m in matches if m.confidence_change is not None)
     score = (
         WEIGHTS.dropped * count["dropped"]
         + WEIGHTS.introduced * count["introduced"]
