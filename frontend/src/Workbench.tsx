@@ -6,6 +6,7 @@ import { DatasetSetup } from "./DatasetSetup";
 import { DegradationInspector } from "./DegradationSettings";
 import { Rail } from "./Rail";
 import { SetupExplorer, SyntheticExplorer } from "./RunHistory";
+import { LatencyInspector } from "./Latency";
 import { MatchTable, StabilityInspector } from "./Stability";
 import { SyntheticRun } from "./SyntheticRun";
 import { findSection, type Section } from "./sections";
@@ -111,6 +112,7 @@ function InspectorContent({ section }: { section: Section }) {
       <>
         <DegradationInspector />
         <StabilityInspector />
+        <LatencyInspector />
       </>
     );
   return <p className="empty-state">Select something to see its details.</p>;

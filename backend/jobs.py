@@ -2,8 +2,9 @@
 
 Starting a run returns a job at once. For a Synthetic run, a worker thread decodes the video, degrades each frame,
 runs the detector on both the clean and the degraded frame, and writes both to the cache so the
-browser can fetch them by id. For a Benchmark run, it runs the detector once on every frame of the subset manifest and
-stores the detections with the frame's ground truth. Only a run that finishes every frame becomes an experiment.
+browser can fetch them by id. Each stage is timed (see backend/latency.py). For a Benchmark run, it runs the detector
+once on every frame of the subset manifest and stores the detections with the frame's ground truth. Only a run that
+finishes every frame becomes an experiment.
 A cancelled or failed run leaves nothing behind.
 
 A run whose experiment is already cached is not run again: its job is completed from the start.
@@ -11,6 +12,7 @@ A run whose experiment is already cached is not run again: its job is completed 
 
 import shutil
 import threading
+import time
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -25,9 +27,10 @@ from backend.benchmark_run import BenchmarkExperiment, read_frame, run_warnings
 from backend.class_mapping import CLASS_MAPPING_VERSION
 from backend.conditions import CONDITIONS
 from backend.degradations import degrade, parameters
-from backend.detection import ModelRunner
+from backend.detection import ModelRunner, TimedDetections
 from backend.experiment import AppliedDegradation, DegradationSettings, Experiment, FrameResult, FrameVariant
 from backend.experiment_cache import ExperimentCache, benchmark_experiment_id, experiment_id, fingerprint
+from backend.latency import FrameTiming, summarize
 from backend.samples import Sample
 from backend.subset import Manifest
 from backend.video import VideoError, open_video
@@ -178,18 +181,33 @@ class JobManager:
             with open_video(sample.path) as video:
                 job.frames_total = video.frame_count
                 job.status = "running"
-                results, size = [], (0, 0)
+                results, timings, size = [], [], (0, 0)
+                started = time.perf_counter()  # reset after each frame, so reading the next is timed alone
                 for index, image in enumerate(video.frames()):
+                    read = time.perf_counter()
                     if job.cancel_requested.is_set():
                         break
                     degraded = degrade(image, settings.kind, settings.severity, rng)
-                    clean_detections = self.runner.detect(image, CONFIDENCE_FLOOR)
-                    degraded_detections = self.runner.detect(degraded, CONFIDENCE_FLOOR)
+                    degraded_at = time.perf_counter()
+                    clean_run, clean_s = self._detect(image)
+                    degraded_run, degraded_s = self._detect(degraded)
+                    detected_at = time.perf_counter()
                     _write_frame(folder, "clean", index, image)
                     _write_frame(folder, "degraded", index, degraded)
-                    results.append(FrameResult(index=index, clean=clean_detections, degraded=degraded_detections))
+                    written = time.perf_counter()
+                    results.append(FrameResult(index=index, clean=clean_run.detections, degraded=degraded_run.detections))
+                    timings.append(
+                        FrameTiming(
+                            read_s=read - started,
+                            degrade_s=degraded_at - read,
+                            inference_s=[clean_run.inference_s, degraded_run.inference_s],
+                            processing_s=[clean_s - clean_run.inference_s, degraded_s - degraded_run.inference_s],
+                            render_s=written - detected_at,
+                        )
+                    )
                     size = image.shape[1], image.shape[0]
                     job.frames_done = index + 1
+                    started = time.perf_counter()
 
             if job.cancel_requested.is_set():
                 _discard(job, folder, "cancelled")
@@ -210,6 +228,7 @@ class JobManager:
                     frame_width=size[0],
                     frame_height=size[1],
                     frames=results,
+                    latency=summarize(timings),
                 ),
             )
             job.status = "completed"  # only after the experiment is stored, so pollers never see a gap
@@ -217,6 +236,11 @@ class JobManager:
             job.error = f"The run stopped at frame {job.frames_done}: {exc}"
             _discard(job, folder, "failed")
 
+    def _detect(self, image: np.ndarray) -> tuple[TimedDetections, float]:
+        """The detections with their inference time, and the whole call's time."""
+        start = time.perf_counter()
+        timed = self.runner.detect_timed(image, CONFIDENCE_FLOOR)
+        return timed, time.perf_counter() - start
 
     def _run_benchmark(self, job: Job, dataset_root: Path, manifest: Manifest) -> None:
         folder = self.cache.staging(job.id)

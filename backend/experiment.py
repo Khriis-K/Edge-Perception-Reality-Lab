@@ -1,4 +1,4 @@
-"""What a finished run records: its settings, the model, and both variants' detections for every frame."""
+"""What a finished run records: its settings, the model, both variants' detections for every frame, and latency."""
 
 from typing import Literal
 
@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from backend.degradations import DegradationKind
 from backend.detection import Detection, ModelInfo
+from backend.latency import LatencySummary
 
 FrameVariant = Literal["clean", "degraded"]
 
@@ -42,3 +43,5 @@ class Experiment(BaseModel):
     frame_width: int
     frame_height: int
     frames: list[FrameResult]
+    # None for a clip no longer than the warm-up, and for runs cached before latency was measured.
+    latency: LatencySummary | None = None

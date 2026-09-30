@@ -603,6 +603,7 @@ export interface components {
             frames: components["schemas"]["FrameResult"][];
             /** Id */
             id: string;
+            latency?: components["schemas"]["LatencySummary"] | null;
             model: components["schemas"]["ModelInfo"];
             /** Sample Id */
             sample_id: string;
@@ -696,6 +697,22 @@ export interface components {
              */
             status: "queued" | "running" | "completed" | "cancelled" | "failed";
         };
+        /** LatencySummary */
+        LatencySummary: {
+            degrade: components["schemas"]["StageLatency"];
+            /** Effective Fps */
+            effective_fps: number | null;
+            /** Frames */
+            frames: number;
+            inference: components["schemas"]["StageLatency"];
+            /** Inference Runs */
+            inference_runs: number;
+            processing: components["schemas"]["StageLatency"];
+            read: components["schemas"]["StageLatency"];
+            render: components["schemas"]["StageLatency"];
+            /** Warmup Frames */
+            warmup_frames: number;
+        };
         /** Manifest */
         Manifest: {
             /** Cap */
@@ -734,8 +751,12 @@ export interface components {
         ModelInfo: {
             /** Name */
             name: string;
+            /** Provider */
+            provider?: string | null;
             /** Runtime */
             runtime: string;
+            /** Size Bytes */
+            size_bytes?: number | null;
             /** Version */
             version: string;
         };
@@ -793,6 +814,13 @@ export interface components {
             median_confidence_shift: components["schemas"]["ConfidenceShift"];
             retention: components["schemas"]["Count"];
             weights: components["schemas"]["ScoreWeights"];
+        };
+        /** StageLatency */
+        StageLatency: {
+            /** P50 Ms */
+            p50_ms: number;
+            /** P90 Ms */
+            p90_ms: number;
         };
         /** StartBenchmarkRequest */
         StartBenchmarkRequest: {

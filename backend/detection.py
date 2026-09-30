@@ -6,7 +6,7 @@ Detections are model outputs, not facts.
 """
 
 import math
-from typing import Protocol
+from typing import NamedTuple, Protocol
 
 import numpy as np
 from pydantic import BaseModel, Field
@@ -35,12 +35,22 @@ class ModelInfo(BaseModel):
     name: str
     version: str
     runtime: str
+    # The execution provider inference ran on, and the weights file's size. None for the stub, which has neither.
+    provider: str | None = None
+    size_bytes: int | None = None
+
+
+class TimedDetections(NamedTuple):
+    detections: list[Detection]
+    inference_s: float  # the model call alone, without pre- or post-processing
 
 
 class ModelRunner(Protocol):
     info: ModelInfo
 
     def detect(self, image: np.ndarray, confidence_threshold: float) -> list[Detection]: ...
+
+    def detect_timed(self, image: np.ndarray, confidence_threshold: float) -> TimedDetections: ...
 
 
 def check_input(image: object, confidence_threshold: float) -> None:
