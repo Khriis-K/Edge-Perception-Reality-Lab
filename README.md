@@ -91,7 +91,11 @@ npm --prefix frontend run gen:api
 
 ### Local files
 
-`models/` holds the fetched weights and `cache/` holds the frames each run decodes. Both are local only and ignored by git. Delete `cache/` whenever you like; completed runs are forgotten when the server restarts anyway.
+`models/` holds the fetched weights, and `cache/` holds finished runs: the decoded clean and degraded frames plus the results. Both are local only and ignored by git.
+
+A run is cached under an id built from everything that affects its results: the input video's content, the model version, the class-mapping version, the confidence floor, and the degradation type, severity and seed. Starting a run with the same settings reuses the cached results instead of running inference again, including after a restart. Setup and Synthetic list the cached runs, and Setup shows the cache folder and its size. A cancelled or failed run is never cached.
+
+To remove cached artifacts, delete `cache/`, or one run's folder inside it, whenever you like; a run in progress at that moment fails and can be started again. `python -m backend --cache-dir <folder>` keeps the cache somewhere else.
 
 ## Test
 

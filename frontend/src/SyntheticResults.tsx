@@ -10,6 +10,10 @@ interface Results {
 interface SyntheticResultsState {
   results: Results | null;
   error: string | null;
+  /** The experiment on screen: the latest run's once it completes, or one picked from the run history. */
+  openId: string | null;
+  /** Open a cached run without running anything. */
+  openExperiment: (experimentId: string) => void;
   /** The frame the viewer, match table and inspector all show. */
   frameIndex: number;
   setFrameIndex: (index: number) => void;
@@ -18,36 +22,45 @@ interface SyntheticResultsState {
 const SyntheticResultsContext = createContext<SyntheticResultsState | null>(null);
 
 /**
- * The completed run's results and the current frame. Shared by the frame viewer, the dock's match
+ * The open experiment's results and the current frame. Shared by the frame viewer, the dock's match
  * table and the inspector, which live in different parts of the workbench.
  */
 export function SyntheticResultsProvider({ children }: { children: ReactNode }) {
   const { job } = useCurrentJob();
+  const jobId = job?.id ?? null;
   const completedId = job?.status === "completed" ? job.experiment_id : null;
+  const [openId, setOpenId] = useState<string | null>(null);
   const [results, setResults] = useState<Results | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Tagged with its experiment, so a new run starts on its first frame.
   const [frame, setFrame] = useState({ experimentId: "", index: 0 });
 
+  // A new run replaces whatever was open, and its results open once it completes.
+  useEffect(() => {
+    if (jobId) setOpenId(completedId);
+  }, [jobId, completedId]);
+
   useEffect(() => {
     setResults(null);
     setError(null);
-    if (!completedId) return;
+    if (!openId) return;
     let cancelled = false;
-    Promise.all([fetchExperiment(completedId), fetchStability(completedId)])
+    Promise.all([fetchExperiment(openId), fetchStability(openId)])
       .then(([experiment, stability]) => !cancelled && setResults({ experiment, stability }))
       .catch((e) => !cancelled && setError(`Could not load the results: ${(e as Error).message}`));
     return () => {
       cancelled = true;
     };
-  }, [completedId]);
+  }, [openId]);
 
   const experimentId = results?.experiment.id ?? "";
   const frameIndex = frame.experimentId === experimentId ? frame.index : 0;
   const setFrameIndex = useCallback((index: number) => setFrame({ experimentId, index }), [experimentId]);
 
   return (
-    <SyntheticResultsContext.Provider value={{ results, error, frameIndex, setFrameIndex }}>
+    <SyntheticResultsContext.Provider
+      value={{ results, error, openId, openExperiment: setOpenId, frameIndex, setFrameIndex }}
+    >
       {children}
     </SyntheticResultsContext.Provider>
   );

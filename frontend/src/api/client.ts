@@ -4,6 +4,9 @@ export type HealthResponse = components["schemas"]["HealthResponse"];
 export type SampleVideo = components["schemas"]["SampleVideo"];
 export type Job = components["schemas"]["JobResponse"];
 export type Experiment = components["schemas"]["Experiment"];
+export type ExperimentSummary = components["schemas"]["ExperimentSummary"];
+export type RunPreview = components["schemas"]["RunPreview"];
+export type CacheInfo = components["schemas"]["CacheInfo"];
 export type StabilityReport = components["schemas"]["StabilityReport"];
 export type FrameStability = components["schemas"]["FrameStability"];
 export type Match = components["schemas"]["Match"];
@@ -72,12 +75,30 @@ export function fetchDegradationParameters(
   return request(`/api/degradations/${kind}/parameters?severity=${severity}`, { signal });
 }
 
+const runRequest = (sampleId: string, degradation: DegradationSettings): RequestInit => ({
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ sample_id: sampleId, degradation }),
+});
+
+/** Starts a job, or, if identical settings already ran, returns a completed job with `cached` set. */
 export function startRun(sampleId: string, degradation: DegradationSettings): Promise<Job> {
-  return request("/api/jobs", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sample_id: sampleId, degradation }),
-  });
+  return request("/api/jobs", runRequest(sampleId, degradation));
+}
+
+/** Whether starting this run would reuse cached results or start a new job. Starts nothing. */
+export function previewRun(sampleId: string, degradation: DegradationSettings, signal: AbortSignal): Promise<RunPreview> {
+  return request("/api/jobs/preview", { ...runRequest(sampleId, degradation), signal });
+}
+
+/** Every cached run, newest first. */
+export function fetchExperiments(signal: AbortSignal): Promise<ExperimentSummary[]> {
+  return request("/api/experiments", { signal });
+}
+
+/** The cache folder and its size, so it can be found and deleted. */
+export function fetchCacheInfo(signal: AbortSignal): Promise<CacheInfo> {
+  return request("/api/cache", { signal });
 }
 
 export function fetchJob(jobId: string): Promise<Job> {

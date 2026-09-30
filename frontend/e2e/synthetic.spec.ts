@@ -11,10 +11,12 @@ const cleanPane = (page: Page) => viewer(page).getByRole("figure", { name: "Clea
 const detections = (page: Page) =>
   cleanPane(page).getByRole("list", { name: "Clean detections (model outputs)" }).getByRole("listitem");
 
-async function startRun(page: Page) {
+/** With a seed, the run is one no other test makes: identical settings would reuse a cached run. */
+async function startRun(page: Page, seed?: number) {
   await page.goto("/synthetic");
   // The real clip is preselected; these tests rely on the stub's fixed boxes on the synthetic one.
   await expect(page.getByLabel("Sample video")).toHaveValue("krakow-city-driving");
+  if (seed !== undefined) await page.getByRole("region", { name: "Degradation" }).getByLabel("Seed").fill(String(seed));
   await page.getByLabel("Sample video").selectOption("synthetic-traffic");
   await page.getByRole("button", { name: "Start run" }).click();
 }
@@ -87,7 +89,8 @@ test("threshold and overlay toggle change the view with no new inference request
 });
 
 test("cancel stops the run and shows no results", async ({ page }) => {
-  await startRun(page);
+  // A run no other test makes: a cached one would complete at once, leaving nothing to cancel.
+  await startRun(page, 901);
   await expect(pill(page)).toBeVisible();
 
   await page.getByRole("button", { name: "Cancel" }).click();
