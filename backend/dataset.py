@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from backend.conditions import Excluded, assign_condition
-from backend.labels import MAIN_CLASSES, parse_labels
+from backend.labels import MAIN_CLASSES, Box, parse_labels
 
 DATASET_ENV_VAR = "EDGE_LAB_DATASET"
 
@@ -123,6 +123,18 @@ def camera_image(root: Path | None, sample_id: str) -> Path:
     if not image.is_file():
         raise FrameNotFound(f"No camera image for sample {sample_id} in the dataset.")
     return image
+
+
+def read_labels(root: Path, sample_id: str) -> list[Box]:
+    """A sample's ground-truth boxes, in pixels. Raises FrameNotFound, OSError, or ValueError on a malformed line:
+    a silently dropped box would turn a correct detection into a false alarm."""
+    if not SAMPLE_ID.fullmatch(sample_id):
+        raise FrameNotFound(f"Not a dataset sample id: {sample_id!r}")
+    label_file = root / LABELS.folder / f"{sample_id}{LABELS.suffix}"
+    boxes, bad_lines = parse_labels(label_file.read_text(encoding="utf-8"))
+    if bad_lines:
+        raise ValueError(f"{label_file.name} {bad_lines[0].message}")
+    return boxes
 
 
 def index_dataset(root: Path) -> DatasetIndex:

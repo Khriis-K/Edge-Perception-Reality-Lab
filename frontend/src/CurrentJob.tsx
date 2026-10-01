@@ -1,5 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { cancelJob, fetchJob, JobNotFound, startRun, type DegradationSettings, type Job } from "./api/client";
+import {
+  cancelJob,
+  fetchJob,
+  JobNotFound,
+  startBenchmark as requestBenchmark,
+  startRun,
+  type DegradationSettings,
+  type Job,
+  type Manifest,
+} from "./api/client";
 
 const POLL_MS = 250;
 
@@ -13,6 +22,7 @@ interface CurrentJob {
   /** Why starting or polling failed, in plain language. */
   error: string | null;
   start: (sampleId: string, degradation: DegradationSettings) => Promise<void>;
+  startBenchmark: (manifest: Manifest) => Promise<void>;
   cancel: () => Promise<void>;
 }
 
@@ -56,14 +66,20 @@ export function CurrentJobProvider({ children }: { children: ReactNode }) {
     };
   }, [activeId]);
 
-  const start = useCallback(async (sampleId: string, degradation: DegradationSettings) => {
+  // Synthetic and Benchmark runs are tracked, polled and cancelled the same way.
+  const track = useCallback(async (begin: () => Promise<Job>) => {
     setError(null);
     try {
-      setJob(await startRun(sampleId, degradation));
+      setJob(await begin());
     } catch (e) {
       setError((e as Error).message);
     }
   }, []);
+  const start = useCallback(
+    (sampleId: string, degradation: DegradationSettings) => track(() => startRun(sampleId, degradation)),
+    [track],
+  );
+  const startBenchmark = useCallback((manifest: Manifest) => track(() => requestBenchmark(manifest)), [track]);
 
   const cancel = useCallback(async () => {
     if (!activeId) return;
@@ -74,7 +90,11 @@ export function CurrentJobProvider({ children }: { children: ReactNode }) {
     }
   }, [activeId]);
 
-  return <CurrentJobContext.Provider value={{ job, error, start, cancel }}>{children}</CurrentJobContext.Provider>;
+  return (
+    <CurrentJobContext.Provider value={{ job, error, start, startBenchmark, cancel }}>
+      {children}
+    </CurrentJobContext.Provider>
+  );
 }
 
 export function useCurrentJob(): CurrentJob {

@@ -21,7 +21,13 @@ Two deliberate choices:
 - **The runtime is left out.** The onnxruntime build and execution provider are not part of the id. The same weights on another build are treated as the same model. The runtime a run actually used is still stored with it and shown with the results.
 - **The seed is kept in, even where it is inert.** The seed stays in the id even for kinds that don't draw from it (everything except noise). A blur run at seed 0 and at seed 1 are separate entries with identical results.
 
-The subset manifest joins the id when Benchmark runs exist.
+A Benchmark run's id (added 2026-09-30, #11) covers the same things, with the whole subset manifest in place of the input fingerprint:
+
+- the manifest: seed, cap, condition vocabulary version, and every frame id per condition;
+- the model's name and version, the class-mapping version and the confidence floor, as above;
+- a `"mode": "benchmark"` tag, so it can never equal a Synthetic id.
+
+**The dataset's files are not fingerprinted.** Hashing every image and label file in a subset (thousands of files, gigabytes on the real dataset) on each start would cost more than it protects against: SeeingThroughFog is a fixed, versioned download. So if the local labels or images change under the same frame ids, the cache serves the old results. The record stores each frame's ground truth as it was read, so the results always match what was actually scored. Delete `cache/` after changing the dataset.
 
 ## Why
 

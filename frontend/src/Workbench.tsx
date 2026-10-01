@@ -1,6 +1,7 @@
 import { Button, Drawer, Tab, Tabs } from "@blueprintjs/core";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Navigate, useParams } from "react-router";
+import { BenchmarkExplorer, BenchmarkRun } from "./Benchmark";
 import { DatasetSetup } from "./DatasetSetup";
 import { DegradationInspector } from "./DegradationSettings";
 import { Rail } from "./Rail";
@@ -54,6 +55,8 @@ function Explorer({ section }: { section: Section }) {
         <SetupExplorer empty={section.explorerEmpty} />
       ) : section.id === "synthetic" ? (
         <SyntheticExplorer empty={section.explorerEmpty} />
+      ) : section.id === "benchmark" ? (
+        <BenchmarkExplorer empty={section.explorerEmpty} />
       ) : (
         <p className="empty-state">{section.explorerEmpty}</p>
       )}
@@ -93,6 +96,8 @@ function Overview({ section }: { section: Section }) {
         <SyntheticRun />
       ) : section.id === "setup" ? (
         <DatasetSetup />
+      ) : section.id === "benchmark" ? (
+        <BenchmarkRun />
       ) : (
         <p className="empty-state">Nothing here yet.</p>
       )}

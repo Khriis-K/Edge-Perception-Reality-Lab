@@ -325,9 +325,20 @@ def test_low_n_flags_each_class_below_the_minimum_and_the_condition_with_it():
 
     assert by_class(evaluate_condition(enough, 0.5))["PassengerCar"].low_n is False
     assert by_class(evaluate_condition(too_few, 0.5))["PassengerCar"].low_n is True
-    # Other classes have no objects at all, so the condition as a whole is low n either way.
-    assert by_class(evaluate_condition(enough, 0.5))["Pedestrian"].low_n is True
-    assert evaluate_condition(enough, 0.5).low_n is True
+    assert by_class(evaluate_condition(enough, 0.5))["Pedestrian"].low_n is True  # no objects at all
+
+
+def test_a_condition_is_low_n_only_through_classes_that_count_toward_map():
+    # Classes with no objects have no AP and are left out of mAP, so they don't make the condition low n.
+    enough = [frame(f"f{i}", [det("car")], [gt("PassengerCar")]) for i in range(LOW_N_OBJECTS)]
+    one_pedestrian = enough + [frame("p", [], [gt("Pedestrian")])]
+
+    assert evaluate_condition(enough, 0.5).low_n is False
+    assert evaluate_condition(one_pedestrian, 0.5).low_n is True
+
+
+def test_a_condition_with_no_objects_is_low_n():
+    assert evaluate_condition([frame("a", [det("car")], [])], display_threshold=0.5).low_n is True
 
 
 def test_unmapped_predictions_are_not_false_alarms():

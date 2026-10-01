@@ -22,6 +22,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/benchmark/experiments/{experiment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Benchmark Results
+         * @description Per condition and class: AP, precision and recall at the display threshold, and object and frame counts.
+         *     Scored from the stored detections, so a new threshold never re-runs inference.
+         */
+        get: operations["get_benchmark_results_api_benchmark_experiments__experiment_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/benchmark/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Benchmark
+         * @description Run the detector over every frame of the manifest and score it, or reuse the cached results. Poll and cancel
+         *     it like any job. A manifest from another condition vocabulary, or listing frames the local dataset doesn't have
+         *     under that condition, is refused (422) with the reason.
+         */
+        post: operations["start_benchmark_api_benchmark_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/cache": {
         parameters: {
             query?: never;
@@ -349,6 +392,27 @@ export interface components {
             /** Severity */
             severity: number;
         };
+        /** BenchmarkResults */
+        BenchmarkResults: {
+            /** Class Mapping Version */
+            class_mapping_version: number;
+            /** Conditions */
+            conditions: components["schemas"]["ConditionResult"][];
+            /** Confidence Floor */
+            confidence_floor: number;
+            /** Display Threshold */
+            display_threshold: number;
+            /** Id */
+            id: string;
+            /** Iou Threshold */
+            iou_threshold: number;
+            /** Low N Objects */
+            low_n_objects: number;
+            manifest: components["schemas"]["Manifest"];
+            model: components["schemas"]["ModelInfo"];
+            /** Warnings */
+            warnings: string[];
+        };
         /**
          * Box
          * @description Corners in 0-1 image coordinates: (x1, y1) top-left, (x2, y2) bottom-right.
@@ -382,6 +446,44 @@ export interface components {
             unmapped_rule: string;
             /** Version */
             version: number;
+        };
+        /** ClassMetrics */
+        ClassMetrics: {
+            /** Ap */
+            ap: number | null;
+            /** Class Name */
+            class_name: string;
+            /** Frames */
+            frames: number;
+            /** Hits */
+            hits: number;
+            /** Low N */
+            low_n: boolean;
+            /** Objects */
+            objects: number;
+            /** Pr Curve */
+            pr_curve: components["schemas"]["PRPoint"][];
+            /** Precision */
+            precision: number | null;
+            /** Predictions */
+            predictions: number;
+            /** Recall */
+            recall: number | null;
+        };
+        /** ConditionResult */
+        ConditionResult: {
+            /** Classes */
+            classes: components["schemas"]["ClassMetrics"][];
+            /** Condition */
+            condition: string;
+            /** Frames */
+            frames: number;
+            /** Low N */
+            low_n: boolean;
+            /** Map */
+            map: number | null;
+            /** Objects */
+            objects: number;
         };
         /** ConditionSummary */
         ConditionSummary: {
@@ -584,9 +686,9 @@ export interface components {
             id: string;
             /**
              * Mode
-             * @constant
+             * @enum {string}
              */
-            mode: "synthetic";
+            mode: "synthetic" | "benchmark";
             /** Progress */
             progress: number;
             /**
@@ -658,6 +760,15 @@ export interface components {
             /** Version */
             version: string;
         };
+        /** PRPoint */
+        PRPoint: {
+            /** Precision */
+            precision: number;
+            /** Recall */
+            recall: number | null;
+            /** Threshold */
+            threshold: number;
+        };
         /**
          * RunPreview
          * @description What starting this run would do: reuse cached results, or start a new job.
@@ -710,6 +821,10 @@ export interface components {
             p50_ms: number;
             /** P90 Ms */
             p90_ms: number;
+        };
+        /** StartBenchmarkRequest */
+        StartBenchmarkRequest: {
+            manifest: components["schemas"]["Manifest"];
         };
         /** StartRunRequest */
         StartRunRequest: {
@@ -773,6 +888,86 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ClassMapping"];
+                };
+            };
+        };
+    };
+    get_benchmark_results_api_benchmark_experiments__experiment_id__get: {
+        parameters: {
+            query: {
+                display_threshold: number;
+            };
+            header?: never;
+            path: {
+                experiment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BenchmarkResults"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_benchmark_api_benchmark_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartBenchmarkRequest"];
+            };
+        };
+        responses: {
+            /** @description Cached: the results were reused */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobResponse"];
+                };
+            };
+            /** @description The dataset is not configured or not ready */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

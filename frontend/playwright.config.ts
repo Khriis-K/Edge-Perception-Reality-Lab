@@ -5,6 +5,10 @@ const PORT = 8765;
 export const FIXTURE_PORT = 8766;
 // Generated fresh on every run by scripts/make_fixture_dataset.py; the real dataset is never used.
 export const FIXTURE_DATASET = resolve(".e2e-dataset");
+// The Benchmark spec gets its own server, dataset copy and cache: dataset.spec.ts briefly breaks the shared fixture
+// dataset to test Re-check, and a benchmark started at that moment would find it not ready.
+export const BENCHMARK_PORT = 8767;
+const BENCHMARK_DATASET = resolve(".e2e-dataset-benchmark");
 // join() gives backslashes on Windows, where the command runs under cmd.exe.
 const python = process.platform === "win32" ? join(".venv", "Scripts", "python.exe") : join(".venv", "bin", "python");
 // Each server gets a cache emptied on every run: finished runs are reused, so a leftover one would turn a test's
@@ -19,6 +23,7 @@ const freshCache = (name: string) => {
 };
 const mainCache = freshCache("main");
 const fixtureCache = freshCache("fixture");
+const benchmarkCache = freshCache("benchmark");
 
 // Drives a real browser against the built frontend served by the backend, as a reviewer would run it.
 // `npm run test:e2e` builds first; the backend serves frontend/dist.
@@ -42,6 +47,12 @@ export default defineConfig({
       command: `${fixtureCache.clear} && ${python} scripts/make_fixture_dataset.py "${FIXTURE_DATASET}" && ${python} -m backend --port ${FIXTURE_PORT} --runner stub --dataset "${FIXTURE_DATASET}" ${fixtureCache.flag}`,
       cwd: "..",
       url: `http://127.0.0.1:${FIXTURE_PORT}/api/health`,
+      reuseExistingServer: false,
+    },
+    {
+      command: `${benchmarkCache.clear} && ${python} scripts/make_fixture_dataset.py "${BENCHMARK_DATASET}" && ${python} -m backend --port ${BENCHMARK_PORT} --runner stub --dataset "${BENCHMARK_DATASET}" ${benchmarkCache.flag}`,
+      cwd: "..",
+      url: `http://127.0.0.1:${BENCHMARK_PORT}/api/health`,
       reuseExistingServer: false,
     },
   ],

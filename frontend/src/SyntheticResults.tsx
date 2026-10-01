@@ -27,8 +27,9 @@ const SyntheticResultsContext = createContext<SyntheticResultsState | null>(null
  */
 export function SyntheticResultsProvider({ children }: { children: ReactNode }) {
   const { job } = useCurrentJob();
-  const jobId = job?.id ?? null;
-  const completedId = job?.status === "completed" ? job.experiment_id : null;
+  const synthetic = job?.mode === "synthetic" ? job : null;
+  const jobId = synthetic?.id ?? null;
+  const completedId = synthetic?.status === "completed" ? synthetic.experiment_id : null;
   const [openId, setOpenId] = useState<string | null>(null);
   const [results, setResults] = useState<Results | null>(null);
   const [error, setError] = useState<string | null>(null);
