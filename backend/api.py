@@ -1,6 +1,6 @@
 """HTTP API routes. Pydantic models here define the OpenAPI schema the frontend types come from."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 
@@ -37,7 +37,8 @@ from backend.findings import (
 )
 from backend.jobs import Job, JobManager, JobMode, JobStatus, NoDetector
 from backend.report import BenchmarkReport, ExportHeader, Report, VideoReport, frames_csv, input_fingerprint, metrics_json
-from backend.report_html import report_html
+from backend.report_html import report_html, video_key
+from backend.report_images import cached_frame_uri, dataset_frame_uri
 from backend.samples import SAMPLES
 from backend.stability import StabilityReport, stability_report
 from backend.subset import (
@@ -557,13 +558,20 @@ def _sample_title(sample_id: str) -> str:
     return sample.title if sample else sample_id
 
 
-# What renders each export file from a run's report document.
-RENDER_FILE: dict[ExportFileName, Callable[[Report], str]] = {
+# What renders each export file from a run's report document and the images the report may show.
+RENDER_FILE: dict[ExportFileName, Callable[[Report, Mapping[str, str]], str]] = {
     "report.html": report_html,
-    "metrics.json": metrics_json,
-    "frames.csv": frames_csv,
+    "metrics.json": lambda report, images: metrics_json(report),
+    "frames.csv": lambda report, images: frames_csv(report),
 }
 Threshold = Annotated[float, Query(ge=0, le=1, allow_inf_nan=False)]
+DatasetImagery = Annotated[
+    bool,
+    Query(
+        description="Embed the worst frames of a Benchmark run's dataset (SeeingThroughFog) in report.html. Off by "
+        "default: the dataset's terms of use decide whether its images may be shared."
+    ),
+]
 
 
 @router.post("/findings/{experiment_id}/exports", status_code=201)
@@ -572,13 +580,17 @@ def export_report(
     jobs: Jobs,
     exports: Exports,
     display_threshold: Threshold,
+    request: Request,
+    dataset_imagery: DatasetImagery = False,
     include: Annotated[list[ExportFileName], Query()] = list(RENDER_FILE),
 ) -> ExportSummary:
     """Save a finished run's report under exports/: the files included of report.html, metrics.json and frames.csv
     (all three unless told), built from the same findings and results these endpoints return at this display threshold.
-    Nothing re-runs. A video run ignores the threshold, as its findings do."""
+    Nothing re-runs. A video run ignores the threshold, as its findings do. A video run's worst frames are embedded;
+    a Benchmark run's only with dataset_imagery."""
     report = _report(jobs, experiment_id, display_threshold)
-    return exports.save(report.export, {name: RENDER_FILE[name](report) for name in dict.fromkeys(include)})
+    images = _report_images(report, jobs, request, dataset_imagery) if "report.html" in include else {}
+    return exports.save(report.export, {name: RENDER_FILE[name](report, images) for name in dict.fromkeys(include)})
 
 
 @router.get(
@@ -586,10 +598,34 @@ def export_report(
     response_class=Response,
     responses={200: {"content": {media: {} for media in MEDIA_TYPES.values()}}},
 )
-def preview_report_file(experiment_id: str, name: ExportFileName, jobs: Jobs, display_threshold: Threshold) -> Response:
+def preview_report_file(
+    experiment_id: str,
+    name: ExportFileName,
+    jobs: Jobs,
+    request: Request,
+    display_threshold: Threshold,
+    dataset_imagery: DatasetImagery = False,
+) -> Response:
     """One file of the report an export would write now, for the Report screen's preview. Nothing is saved."""
     report = _report(jobs, experiment_id, display_threshold)
-    return Response(RENDER_FILE[name](report), media_type=MEDIA_TYPES[name])
+    images = _report_images(report, jobs, request, dataset_imagery) if name == "report.html" else {}
+    return Response(RENDER_FILE[name](report, images), media_type=MEDIA_TYPES[name])
+
+
+def _report_images(report: Report, jobs: JobManager, request: Request, dataset_imagery: bool) -> dict[str, str]:
+    """The worst frames' images, as report_html keys them. A frame the cache or dataset no longer has is left out."""
+    if isinstance(report, VideoReport):
+        found = {
+            video_key(variant, frame.index): cached_frame_uri(jobs.frame_path(report.export.experiment_id, variant, frame.index))
+            for frame in report.findings.worst_frames
+            for variant in ("clean", "degraded")
+        }
+    elif dataset_imagery:
+        root = request.app.state.dataset_root
+        found = {frame.id: dataset_frame_uri(root, frame.id) for frame in report.findings.worst_frames}
+    else:
+        return {}
+    return {key: uri for key, uri in found.items() if uri is not None}
 
 
 def _report(jobs: JobManager, experiment_id: str, display_threshold: float) -> Report:

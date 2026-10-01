@@ -10,7 +10,7 @@ Every finding a run has must have a renderer below: the report looks each one up
 export rather than silently going missing.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from html import escape
 from typing import NamedTuple
 
@@ -33,6 +33,7 @@ from backend.findings import (
 )
 from backend.latency import LatencySummary
 from backend.report import BenchmarkReport, Report, VideoReport
+from backend.samples import SAMPLES
 from backend.stability import Count
 
 CITATION = (
@@ -80,6 +81,10 @@ code, .ids { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
 figure.pr { margin: 0; width: 300px; }
 figure.pr h3 { margin-top: 8px; }
 figure.pr ul { padding-left: 18px; margin: 4px 0; font-size: 12px; }
+.gallery { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+.gallery figure { margin: 0; flex: 1 1 260px; max-width: 460px; }
+.gallery img { display: block; width: 100%; height: auto; border: 1px solid #c5cbd3; }
+.gallery figcaption { font-size: 12px; color: #404854; }
 @media print {
   .band, td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   table, figure, li { break-inside: avoid; }
@@ -88,7 +93,10 @@ figure.pr ul { padding-left: 18px; margin: 4px 0; font-size: 12px; }
 """
 
 
-def report_html(report: Report) -> str:
+def report_html(report: Report, images: Mapping[str, str] | None = None) -> str:
+    """The report page. `images` holds data URIs for the worst frames the page may show, by `frame_key`: dataset frames
+    only when the user chose to include them. A frame with no image is named by id, as before."""
+    images = images or {}
     header = report.export
     kind = "Benchmark run" if isinstance(report, BenchmarkReport) else "Synthetic run on video"
     facts = [kind, f"exported {header.created_at:%Y-%m-%d %H:%M} UTC"]
@@ -96,9 +104,9 @@ def report_html(report: Report) -> str:
         facts.append(f"display threshold {header.display_threshold:.2f}")
     facts.append(f"run {header.experiment_id}")
     if isinstance(report, BenchmarkReport):
-        body = _findings(report, BENCHMARK_FINDINGS, BENCHMARK_RENDERERS) + _benchmark_worst(report) + _benchmark_record(report)
+        body = _findings(report, BENCHMARK_FINDINGS, BENCHMARK_RENDERERS) + _benchmark_worst(report, images) + _benchmark_record(report)
     else:
-        body = _findings(report, VIDEO_FINDINGS, VIDEO_RENDERERS) + _video_worst(report) + _video_record(report)
+        body = _findings(report, VIDEO_FINDINGS, VIDEO_RENDERERS) + _video_worst(report, images) + _video_record(report)
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -119,7 +127,7 @@ def report_html(report: Report) -> str:
 {_list(report.findings.limitations)}
 </section>
 {body}
-<section id="citation">
+{_credit(report, images)}<section id="citation">
 <h2>Citation</h2>
 <p>Benchmark mode scores the detector against the SeeingThroughFog dataset: {escape(CITATION)}</p>
 </section>
@@ -401,9 +409,23 @@ VIDEO_RENDERERS: dict[FindingKey, Callable[[VideoReport], str]] = {"reliability-
 # --- worst frames --------------------------------------------------------------------------------------------
 
 
-def _benchmark_worst(report: BenchmarkReport) -> str:
+def video_key(variant: str, index: int) -> str:
+    """The `images` key of a video run's clean or degraded frame."""
+    return f"{variant}-{index}"
+
+
+def _figure(uri: str, alt: str, caption: str) -> str:
+    return f'<figure><img src="{uri}" alt="{escape(alt, quote=True)}"><figcaption>{escape(caption)}</figcaption></figure>'
+
+
+def _gallery(figures: list[str]) -> str:
+    return f'<div class="gallery">{"".join(figures)}</div>' if figures else ""
+
+
+def _benchmark_worst(report: BenchmarkReport, images: Mapping[str, str]) -> str:
     worst = report.findings.worst_frames
     weights = report.findings.record.weights
+    shown = [_figure(images[f.id], f"Frame {f.id}", f"{f.id} · score {f.score:.2f}") for f in worst if f.id in images]
     rows = "".join(
         f'<tr><td><code>{escape(f.id)}</code></td>{_num(f"{f.score:.2f}")}<td>{condition_name(f.condition)}</td>'
         f"{_num(f.misses)}{_num(f.false_alarms)}{_num(f.class_confusions)}{_num(f.hits)}</tr>"
@@ -416,18 +438,46 @@ def _benchmark_worst(report: BenchmarkReport) -> str:
     return _worst_section(
         f"The highest error scores at the display threshold over every condition: misses × {weights.misses:g} + "
         f"false alarms × {weights.false_alarms:g} + class confusions × {weights.class_confusions:g}. Dataset frames are "
-        "named by id only; the report holds no imagery.",
-        f"<table><thead><tr>{head}</tr></thead><tbody>{rows}</tbody></table>"
+        + (
+            "Their images are embedded below, from the dataset."
+            if shown
+            else "Dataset frames are named by id only; the report holds no imagery."
+        ),
+        f"<table><thead><tr>{head}</tr></thead><tbody>{rows}</tbody></table>{_gallery(shown)}"
         if worst
         else _note("No frame has an error to rank."),
     )
 
 
-def _video_worst(report: VideoReport) -> str:
+def _video_worst(report: VideoReport, images: Mapping[str, str]) -> str:
     worst = report.findings.worst_frames
+    shown = [
+        _figure(images[video_key(variant, p.index)], f"Frame {p.index}, {variant}", f"Frame {p.index} · {variant}")
+        for p in worst
+        for variant in ("clean", "degraded")
+        if video_key(variant, p.index) in images
+    ]
     return _worst_section(
-        "The least stable frames of the clip, by stability score. Frames are named by index; the report holds no imagery.",
-        _video_frames(worst) if worst else _note("No frame's detections changed, so none ranks as least stable."),
+        "The least stable frames of the clip, by stability score. Frames are named by index"
+        + (", and shown clean beside degraded." if shown else "; the report holds no imagery."),
+        _video_frames(worst) + _gallery(shown)
+        if worst
+        else _note("No frame's detections changed, so none ranks as least stable."),
+    )
+
+
+def _credit(report: Report, images: Mapping[str, str]) -> str:
+    """The attribution a bundled clip's licence requires, on a report that shows frames of that clip."""
+    sample = SAMPLES.get(report.findings.record.sample_id) if isinstance(report, VideoReport) else None
+    if not images or sample is None or sample.credit is None:
+        return ""
+    c = sample.credit
+    return (
+        '<section id="credit">\n<h2>Credit</h2>\n'
+        f'<p>Frames of "{escape(c.work)}" by {escape(c.author)}, licensed under '
+        f'<a href="{c.licence_url}">{escape(c.licence)}</a>. Source: <a href="{c.source_url}">{escape(c.source_url)}</a>. '
+        f"The frames were modified: {escape(c.changes)}, and the degraded frames carry the run's degradation.</p>\n"
+        "</section>\n"
     )
 
 

@@ -122,6 +122,30 @@ test.describe("Benchmark", () => {
     const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
     expect(results.violations).toEqual([]);
   });
+
+  test("dataset imagery is off until chosen, warns about the dataset's terms, and then embeds the worst frames", async ({
+    page,
+  }) => {
+    await page.goto("/benchmark");
+    await expect(page.getByText(/^Subset: seed 0, up to 300 frames per condition/)).toBeVisible();
+    await page.getByRole("button", { name: "Run benchmark" }).click();
+    await expect(explorer(page).getByRole("list", { name: "Conditions" }).getByRole("listitem")).toHaveCount(8, {
+      timeout: 15_000,
+    });
+    await page.getByRole("button", { name: "Export report" }).click();
+    await openRun(page, "Benchmark: seed 0, up to 300 frames per condition");
+    await expect(preview(page).getByRole("heading", { name: "Finding 01 · Sim-to-real" })).toBeVisible();
+
+    const exportForm = inspector(page).getByRole("region", { name: "Export" });
+    const imagery = exportForm.getByRole("checkbox", { name: "Include dataset imagery" });
+    await expect(imagery).not.toBeChecked();
+    await expect(exportForm.getByRole("note")).toHaveCount(0);
+    await expect(preview(page).locator("img")).toHaveCount(0);
+
+    await imagery.check({ force: true });
+    await expect(exportForm.getByRole("note")).toContainText("terms of use");
+    await expect(preview(page).locator("section#worst-frames img").first()).toBeVisible();
+  });
 });
 
 test.describe("Synthetic", () => {
