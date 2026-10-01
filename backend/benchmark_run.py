@@ -39,7 +39,7 @@ class ConditionResult(BaseModel):
     condition: str
     frames: int
     objects: int
-    low_n: bool  # some class has fewer than low_n_objects objects
+    low_n: bool  # some class in mAP has fewer than low_n_objects objects, or no class has any
     map: float | None
     classes: list[ClassMetrics]
 

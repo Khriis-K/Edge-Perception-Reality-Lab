@@ -23,7 +23,8 @@ Worst-frame score, per frame, at the display threshold:
 Hits and ignored predictions add nothing.
 
 Every metric carries its object and frame counts (for a class, the frames holding at least one of its objects), and
-is flagged low n below LOW_N_OBJECTS objects.
+is flagged low n below LOW_N_OBJECTS objects. A condition is low n when a class in its mAP (one with objects) is, or
+when it has no objects and so no mAP; a class with no objects is left out of mAP, so it doesn't flag the condition.
 """
 
 import math
@@ -109,7 +110,7 @@ class ConditionMetrics(BaseModel):
     low_n_objects: int
     frames: int
     objects: int
-    low_n: bool  # some class has fewer than low_n_objects objects
+    low_n: bool  # some class in mAP has fewer than low_n_objects objects, or no class has any
     map: float | None
     classes: list[ClassMetrics]  # in MAIN_CLASSES order
     frame_results: list[FrameBenchmark]  # in input order, scored at the display threshold
@@ -251,7 +252,7 @@ def evaluate_condition(frames: list[BenchmarkFrame], display_threshold: float) -
         low_n_objects=LOW_N_OBJECTS,
         frames=len(frames),
         objects=sum(objects.values()),
-        low_n=any(c.low_n for c in classes),
+        low_n=not aps or any(c.low_n for c in classes if c.ap is not None),
         map=sum(aps) / len(aps) if aps else None,
         classes=classes,
         frame_results=frame_results,
