@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { heatmapCellText, reliabilityReason, textColorOn, worstReason } from "./findingsFormat";
+import type { ClassMetrics } from "./api/client";
+import { curveSummary, heatmapCellText, reliabilityReason, textColorOn, worstReason } from "./findingsFormat";
 
 const frame = (counts: { hits?: number; misses?: number; false_alarms?: number; class_confusions?: number }) => ({
   id: "f",
@@ -86,5 +87,51 @@ describe("textColorOn", () => {
     expect(textColorOn("rgb(138, 187, 255)")).toBe("#000000"); // BLUE5
     expect(textColorOn("rgb(47, 52, 60)")).toBe("#ffffff"); // DARK_GRAY3
     expect(textColorOn("rgb(90, 110, 140)")).toBe("#ffffff");
+  });
+});
+
+const metrics = (overrides: Partial<ClassMetrics>): ClassMetrics => ({
+  class_name: "PassengerCar",
+  objects: 40,
+  frames: 12,
+  low_n: false,
+  ap: 0.5,
+  predictions: 4,
+  hits: 2,
+  precision: 0.5,
+  recall: 0.05,
+  pr_curve: [{ threshold: 0.9, precision: 1, recall: 0.025 }],
+  ...overrides,
+});
+
+describe("curveSummary", () => {
+  it("names the side, its AP over its objects, and where the display threshold sits on the curve", () => {
+    expect(curveSummary("Real fog · day", metrics({}), 0.25)).toBe(
+      "Real fog · day: AP 0.50 over 40 objects; at ≥ 0.25, precision 0.50 and recall 0.05",
+    );
+  });
+
+  it("flags low n", () => {
+    expect(curveSummary("Clear · day", metrics({ objects: 1, low_n: true, ap: 1, precision: 1, recall: 1 }), 0.25)).toBe(
+      "Clear · day: AP 1.00 over 1 object (low n); at ≥ 0.25, precision 1.00 and recall 1.00",
+    );
+  });
+
+  it("says when nothing is shown at the display threshold, so there is no point to mark", () => {
+    expect(curveSummary("Clear · day", metrics({ precision: null, recall: 0, predictions: 0, hits: 0 }), 0.5)).toBe(
+      "Clear · day: AP 0.50 over 40 objects; nothing shown at ≥ 0.50",
+    );
+  });
+
+  it("says when nothing is predicted at all, so there is no curve", () => {
+    expect(curveSummary("Real fog · day", metrics({ ap: 0, pr_curve: [], precision: null, recall: 0 }), 0.25)).toBe(
+      "Real fog · day: AP 0.00 over 40 objects; nothing predicted, so no curve",
+    );
+  });
+
+  it("says when the class has no objects, so recall, and the curve, are undefined", () => {
+    expect(curveSummary("Real fog · day", metrics({ objects: 0, ap: null, recall: null, low_n: true }), 0.25)).toBe(
+      "Real fog · day: no objects of this class, so no curve",
+    );
   });
 });

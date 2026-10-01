@@ -6,13 +6,14 @@ import {
   type BenchmarkFindings,
   type Comparison,
   type FindingKey,
+  type PRCurves,
   type Side,
   type FrameReliability,
   type VideoFindings,
   type WorstFrame,
 } from "./api/client";
 import { conditionName, formatMetric } from "./benchmarkFormat";
-import { ApHeatmap, DropBars, ReliabilityTimeline } from "./FindingsCharts";
+import { ApHeatmap, CURVE_STYLES, DropBars, PrCurves, ReliabilityTimeline } from "./FindingsCharts";
 import { useFindings } from "./FindingsData";
 import { reliabilityReason, worstReason } from "./findingsFormat";
 import { scoreParts } from "./frameReview";
@@ -21,6 +22,7 @@ import { scoreParts } from "./frameReview";
 const BENCHMARK_OUTLINE: { key: FindingKey; title: string }[] = [
   { key: "sim-to-real", title: "Sim-to-real" },
   { key: "where-it-fails", title: "Where it fails" },
+  { key: "precision-recall", title: "Precision–recall" },
 ];
 const VIDEO_OUTLINE: { key: FindingKey; title: string }[] = [{ key: "reliability-timeline", title: "Reliability timeline" }];
 const GALLERY_ID = "worst-frames";
@@ -112,6 +114,13 @@ function BenchmarkDocument({ findings }: { findings: BenchmarkFindings }) {
       </Finding>
       <Finding number={2} outline={BENCHMARK_OUTLINE[1]} headline={findings.headlines["where-it-fails"]}>
         <ApHeatmap rows={findings.conditions} lowN={findings.record.low_n_objects} />
+      </Finding>
+      <Finding number={3} outline={BENCHMARK_OUTLINE[2]} headline={findings.headlines["precision-recall"]}>
+        <PrFinding
+          curves={findings.pr_curves}
+          syntheticId={synthetic?.experiment_id ?? null}
+          threshold={findings.display_threshold}
+        />
       </Finding>
       <Gallery
         note={`Ranked by error score at confidence ≥ ${findings.display_threshold.toFixed(2)}: misses × ${weights.misses} + false alarms × ${weights.false_alarms} + class confusions × ${weights.class_confusions}.`}
@@ -206,6 +215,45 @@ function HeadlineEditor({ findingKey, label, saved }: { findingKey: FindingKey; 
       </Button>
       {status && <span className="field-note" role="status">{status}</span>}
     </form>
+  );
+}
+
+/**
+ * Each class's PR curve on clear, synthetic-fog and real-fog frames, so a reader sees every threshold, not one cutoff:
+ * whether fog caps recall or only lowers confidence. The synthetic side is the run picked in Finding 01. The class
+ * picker only switches which of the curves already loaded is drawn.
+ */
+function PrFinding({ curves, syntheticId, threshold }: { curves: PRCurves; syntheticId: string | null; threshold: number }) {
+  const classes = curves.reference?.classes.map((c) => c.class_name) ?? [];
+  const [pick, setPick] = useState<string | null>(null);
+  if (curves.reference === null) {
+    return <p className="field-note">This run has no Clear · day frames, so there is nothing to compare against.</p>;
+  }
+  const className = pick ?? curves.reference.classes.find((c) => c.objects > 0)?.class_name ?? classes[0];
+  const synthetic = curves.synthetic.find((s) => s.experiment_id === syntheticId) ?? null;
+  const of = (side: PRCurves["reference"]) => side?.classes.find((c) => c.class_name === className);
+  return (
+    <>
+      <label className="findings-run">
+        Class
+        <select value={className} onChange={(event) => setPick(event.target.value)}>
+          {classes.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <PrCurves
+        className={className}
+        threshold={threshold}
+        lines={[
+          { name: curves.reference.title, ...CURVE_STYLES.reference, metrics: of(curves.reference) },
+          { name: synthetic?.title ?? "Synthetic fog", ...CURVE_STYLES.synthetic, metrics: of(synthetic) },
+          { name: curves.real?.title ?? "Real fog · day", ...CURVE_STYLES.real, metrics: of(curves.real) },
+        ]}
+      />
+    </>
   );
 }
 

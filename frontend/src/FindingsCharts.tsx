@@ -1,7 +1,7 @@
 import { scaleBand, scaleLinear } from "d3-scale";
-import type { Comparison, FrameReliability, HeatmapRow } from "./api/client";
+import type { ClassMetrics, Comparison, FrameReliability, HeatmapRow } from "./api/client";
 import { conditionName, formatMetric } from "./benchmarkFormat";
-import { heatmapCellText, textColorOn } from "./findingsFormat";
+import { curveSummary, heatmapCellText, textColorOn } from "./findingsFormat";
 
 // Blueprint tokens, as in styles.css: blue is the synthetic side, orange the real (degraded) side. They differ in
 // lightness too, and every bar carries its value and series name in text.
@@ -9,6 +9,7 @@ const SYNTHETIC = "#8abbff"; // BLUE5
 const REAL = "#c87619"; // ORANGE3
 const AXIS = "#abb3bf"; // GRAY4
 const GRID = "#2f343c"; // DARK_GRAY3
+const REFERENCE = "#f6f7f9"; // LIGHT_GRAY5: clear weather
 
 const BAR_WIDTH = 520;
 const LABEL_WIDTH = 120;
@@ -212,6 +213,107 @@ export function ReliabilityTimeline({ timeline, worst: peak }: { timeline: Frame
             ? `Least stable: frame ${peak.index}, score ${peak.score.toFixed(2)}`
             : "No frame changed under the degradation."}
         </span>
+      </figcaption>
+    </figure>
+  );
+}
+
+const PR_SIZE = 360;
+const PR_MARGIN = { top: 10, right: 16, bottom: 34, left: 40 };
+
+export type CurveLine = {
+  name: string;
+  color: string;
+  dash: string | undefined; // each side has its own line style too, so it isn't told apart by color alone
+  metrics: ClassMetrics | undefined; // undefined: the side wasn't run
+};
+
+/** The sides' curve styles, in the order the chart and its labels list them. */
+export const CURVE_STYLES = {
+  reference: { color: REFERENCE, dash: undefined },
+  synthetic: { color: SYNTHETIC, dash: "6 3" },
+  real: { color: REAL, dash: "2 3" },
+};
+
+/**
+ * One class's precision-recall curves, one per side, with each side's point at the display threshold ringed. Every
+ * curve is labelled in text below the plot: its AP, objects and that point.
+ */
+export function PrCurves({ className, lines, threshold }: { className: string; lines: CurveLine[]; threshold: number }) {
+  const x = scaleLinear().domain([0, 1]).range([PR_MARGIN.left, PR_SIZE - PR_MARGIN.right]);
+  const y = scaleLinear().domain([0, 1]).range([PR_SIZE - PR_MARGIN.bottom, PR_MARGIN.top]);
+  const plotted = lines.filter((line) => line.metrics && line.metrics.objects > 0 && line.metrics.pr_curve.length > 0);
+  const ticks = [0, 0.25, 0.5, 0.75, 1];
+
+  return (
+    <figure className="chart">
+      <svg
+        role="img"
+        aria-label={`Precision-recall curves for ${className}: ${lines.map((l) => l.name).join(", ")}; each is described below`}
+        viewBox={`0 0 ${PR_SIZE} ${PR_SIZE}`}
+        width="100%"
+        style={{ maxWidth: PR_SIZE }}
+      >
+        {ticks.map((tick) => (
+          <g key={tick}>
+            <line x1={x(0)} x2={x(1)} y1={y(tick)} y2={y(tick)} stroke={GRID} />
+            <line x1={x(tick)} x2={x(tick)} y1={y(0)} y2={y(1)} stroke={GRID} />
+            <text x={x(0) - 4} y={y(tick) + 3} textAnchor="end" fill={AXIS} fontSize={10}>
+              {tick}
+            </text>
+            <text x={x(tick)} y={y(0) + 13} textAnchor="middle" fill={AXIS} fontSize={10}>
+              {tick}
+            </text>
+          </g>
+        ))}
+        <text x={(x(0) + x(1)) / 2} y={PR_SIZE - 4} textAnchor="middle" fill={AXIS} fontSize={11}>
+          Recall
+        </text>
+        <text transform={`translate(11,${(y(0) + y(1)) / 2}) rotate(-90)`} textAnchor="middle" fill={AXIS} fontSize={11}>
+          Precision
+        </text>
+        {plotted.map(({ name, color, dash, metrics }) => {
+          const points = metrics!.pr_curve.map((p) => [x(p.recall ?? 0), y(p.precision)] as const);
+          const [endX, endY] = points[points.length - 1];
+          return (
+            <g key={name}>
+              <path
+                d={`M${points.map(([px, py]) => `${px},${py}`).join("L")}`}
+                fill="none"
+                stroke={color}
+                strokeWidth={2}
+                strokeDasharray={dash}
+              />
+              <circle cx={endX} cy={endY} r={2.5} fill={color} />
+              {metrics!.precision !== null && (
+                <circle
+                  cx={x(metrics!.recall ?? 0)}
+                  cy={y(metrics!.precision)}
+                  r={6}
+                  fill="none"
+                  stroke={color}
+                  strokeWidth={2}
+                />
+              )}
+            </g>
+          );
+        })}
+      </svg>
+      <figcaption>
+        <ul aria-label="Curves" className="chart-legend curve-labels">
+          {lines.map(({ name, color, dash, metrics }) => (
+            <li key={name}>
+              <svg width={24} height={10} aria-hidden>
+                <line x1={0} x2={24} y1={5} y2={5} stroke={color} strokeWidth={2} strokeDasharray={dash} />
+              </svg>
+              {metrics ? curveSummary(name, metrics, threshold) : `${name}: not run`}
+            </li>
+          ))}
+        </ul>
+        <p className="chart-legend">
+          A ring marks each curve&apos;s point at the display threshold, confidence ≥ {threshold.toFixed(2)}; a dot, its
+          lowest confidence.
+        </p>
       </figcaption>
     </figure>
   );

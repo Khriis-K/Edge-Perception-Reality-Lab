@@ -538,6 +538,7 @@ export interface components {
             latency: components["schemas"]["LatencySummary"] | null;
             /** Limitations */
             limitations: string[];
+            pr_curves: components["schemas"]["PRCurves"];
             record: components["schemas"]["BenchmarkRecord"];
             sim_to_real: components["schemas"]["SimToReal"];
             /** Worst Frames */
@@ -746,6 +747,20 @@ export interface components {
             rate: number | null;
             /** Total */
             total: number;
+        };
+        /**
+         * CurveSide
+         * @description One side's per-class PR curves, each with its precision and recall at the display threshold.
+         */
+        CurveSide: {
+            /** Classes */
+            classes: components["schemas"]["ClassMetrics"][];
+            /** Condition */
+            condition: string;
+            /** Experiment Id */
+            experiment_id: string | null;
+            /** Title */
+            title: string;
         };
         /** DatasetPartStatus */
         DatasetPartStatus: {
@@ -1137,6 +1152,13 @@ export interface components {
             size_bytes?: number | null;
             /** Version */
             version: string;
+        };
+        /** PRCurves */
+        PRCurves: {
+            real: components["schemas"]["CurveSide"] | null;
+            reference: components["schemas"]["CurveSide"] | null;
+            /** Synthetic */
+            synthetic: components["schemas"]["CurveSide"][];
         };
         /** PRPoint */
         PRPoint: {
@@ -1882,7 +1904,7 @@ export interface operations {
             header?: never;
             path: {
                 experiment_id: string;
-                key: "sim-to-real" | "where-it-fails" | "reliability-timeline";
+                key: "sim-to-real" | "where-it-fails" | "precision-recall" | "reliability-timeline";
             };
             cookie?: never;
         };
