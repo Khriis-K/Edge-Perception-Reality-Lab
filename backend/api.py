@@ -1,6 +1,6 @@
 """HTTP API routes. Pydantic models here define the OpenAPI schema the frontend types come from."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
@@ -23,6 +23,7 @@ from backend.dataset import DatasetIndex, FrameNotFound, camera_image, check_rea
 from backend.degradations import KINDS, RANDOMIZED, TITLES, DegradationKind, parameters
 from backend.detection import ModelInfo
 from backend.experiment import AppliedDegradation, DegradationSettings, Experiment, FrameVariant
+from backend.exports import MEDIA_TYPES, ExportFileName, ExportStore, ExportSummary
 from backend.findings import (
     BENCHMARK_FINDINGS,
     HEADLINE_LENGTH,
@@ -34,6 +35,8 @@ from backend.findings import (
     video_findings,
 )
 from backend.jobs import Job, JobManager, JobMode, JobStatus, NoDetector
+from backend.report import BenchmarkReport, ExportHeader, Report, VideoReport, frames_csv, input_fingerprint, metrics_json
+from backend.report_html import report_html
 from backend.samples import SAMPLES
 from backend.stability import StabilityReport, stability_report
 from backend.subset import (
@@ -68,6 +71,13 @@ def get_jobs(request: Request) -> JobManager:
 
 
 Jobs = Annotated[JobManager, Depends(get_jobs)]
+
+
+def get_exports(request: Request) -> ExportStore:
+    return request.app.state.exports
+
+
+Exports = Annotated[ExportStore, Depends(get_exports)]
 
 
 class HealthResponse(BaseModel):
@@ -482,16 +492,15 @@ def get_synthetic_frames_results(
 @router.get("/findings")
 def list_findings_runs(jobs: Jobs) -> list[FindingsRun]:
     """The runs Findings can open, newest first: Benchmark runs and Synthetic runs on video."""
-    runs = []
-    for entry in jobs.cache.entries((BenchmarkExperiment, Experiment)):
-        experiment = entry.experiment
-        if isinstance(experiment, BenchmarkExperiment):
-            manifest = experiment.manifest
-            kind, title = "benchmark", f"Benchmark: seed {manifest.seed}, up to {manifest.cap} frames per condition"
-        else:
-            kind, title = "video", f"{degradation_title(experiment.degradation)} on {_sample_title(experiment.sample_id)}"
-        runs.append(FindingsRun(id=experiment.id, kind=kind, title=title, saved_at=entry.saved_at))
-    return runs
+    return [
+        FindingsRun(
+            id=entry.experiment.id,
+            kind="benchmark" if isinstance(entry.experiment, BenchmarkExperiment) else "video",
+            title=_run_title(entry.experiment),
+            saved_at=entry.saved_at,
+        )
+        for entry in jobs.cache.entries((BenchmarkExperiment, Experiment))
+    ]
 
 
 @router.get("/findings/{experiment_id}")
@@ -536,9 +545,78 @@ def _findings_run(jobs: JobManager, experiment_id: str) -> BenchmarkExperiment |
     return run
 
 
+def _run_title(run: BenchmarkExperiment | Experiment) -> str:
+    if isinstance(run, BenchmarkExperiment):
+        return f"Benchmark: seed {run.manifest.seed}, up to {run.manifest.cap} frames per condition"
+    return f"{degradation_title(run.degradation)} on {_sample_title(run.sample_id)}"
+
+
 def _sample_title(sample_id: str) -> str:
     sample = SAMPLES.get(sample_id)
     return sample.title if sample else sample_id
+
+
+@router.post("/findings/{experiment_id}/exports", status_code=201)
+def export_report(
+    experiment_id: str,
+    jobs: Jobs,
+    exports: Exports,
+    display_threshold: Annotated[float, Query(ge=0, le=1, allow_inf_nan=False)],
+) -> ExportSummary:
+    """Save a finished run's report under exports/: report.html, metrics.json and frames.csv, built from the same
+    findings and results these endpoints return at this display threshold. Nothing re-runs. A video run ignores the
+    threshold, as its findings do."""
+    run = _findings_run(jobs, experiment_id)
+    headlines = jobs.cache.headlines(experiment_id)
+    created_at = datetime.now(UTC)
+    report: Report
+    if isinstance(run, BenchmarkExperiment):
+        runs = jobs.cache.synthetic_frames_runs()
+        header = ExportHeader(
+            experiment_id=run.id, kind="benchmark", title=_run_title(run), display_threshold=display_threshold,
+            created_at=created_at,
+        )  # fmt: skip
+        report = BenchmarkReport(
+            export=header,
+            findings=benchmark_findings(run, runs, display_threshold, headlines),
+            results=benchmark_results(run, display_threshold, benchmark_rows(run, runs, display_threshold)),
+        )
+    else:
+        sample = SAMPLES.get(run.sample_id)
+        header = ExportHeader(
+            experiment_id=run.id, kind="video", title=_run_title(run), display_threshold=None, created_at=created_at
+        )
+        report = VideoReport(
+            export=header,
+            input_fingerprint=input_fingerprint(run, sample.path) if sample else None,
+            findings=video_findings(run, _sample_title(run.sample_id), headlines),
+            results=stability_report(run.frames),
+        )
+    files: dict[ExportFileName, str] = {
+        "report.html": report_html(report),
+        "metrics.json": metrics_json(report),
+        "frames.csv": frames_csv(report),
+    }
+    return exports.save(header, files)
+
+
+@router.get("/exports")
+def list_exports(exports: Exports) -> list[ExportSummary]:
+    """Every saved export, newest first, with its files and their sizes. Read from the exports folder."""
+    return exports.exports()
+
+
+@router.get(
+    "/exports/{export_id}/{name}",
+    response_class=FileResponse,
+    responses={200: {"content": {media: {} for media in MEDIA_TYPES.values()}}},
+)
+def get_export_file(export_id: str, name: ExportFileName, exports: Exports) -> FileResponse:
+    """One file of a saved export, by the export's id and the file's name: never a path."""
+    path = exports.file(export_id, name)
+    if path is None:
+        raise HTTPException(status_code=404, detail="No such export file.")
+    return FileResponse(path, media_type=MEDIA_TYPES[name])
 
 
 @router.get("/benchmark/experiments/{experiment_id}/frames/{frame_id}")

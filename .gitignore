@@ -3,9 +3,10 @@ __pycache__/
 .venv/
 *.egg-info/
 
-# Local-only artifacts: fetched model weights and derived frames
+# Local-only artifacts: fetched model weights, derived frames and exported reports
 models/
 cache/
+exports/
 
 # Frontend
 node_modules/
