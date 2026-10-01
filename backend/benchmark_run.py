@@ -181,6 +181,8 @@ def find_frame(experiment: BenchmarkExperiment, frame_id: str) -> tuple[str, Ben
 
 
 def frame_detail(condition: str, frame: BenchmarkFrame) -> FrameDetail:
+    """The frame for the frame viewer: mapped predictions, unmapped ones apart, every label with its role, and the
+    matches at every display threshold."""
     predictions = map_detections(frame.predictions)
     return FrameDetail(
         id=frame.id,

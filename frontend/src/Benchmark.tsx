@@ -14,9 +14,9 @@ import { useDatasetStatus } from "./useDatasetStatus";
 /**
  * Benchmark screen: run the detector over the subset chosen in Setup (or a saved manifest file), then read each
  * condition's per-class AP, and precision and recall at the display threshold, and review its frames.
- * `onSelect` runs when a box in the frame viewer is clicked.
+ * `onOpenInspector` runs when a box in the frame viewer is clicked, to open the inspector drawer.
  */
-export function BenchmarkRun({ onSelect }: { onSelect: () => void }) {
+export function BenchmarkRun({ onOpenInspector }: { onOpenInspector: () => void }) {
   const { status } = useDatasetStatus();
   const ready = status?.ready ?? false;
   const [choice] = useSubsetChoice();
@@ -81,7 +81,7 @@ export function BenchmarkRun({ onSelect }: { onSelect: () => void }) {
             {message}
           </p>
         ))}
-      {results && <BenchmarkBody onSelect={onSelect} />}
+      {results && <BenchmarkBody onOpenInspector={onOpenInspector} />}
     </div>
   );
 }
@@ -100,7 +100,7 @@ function BenchmarkStatus({ job }: { job: Job | null }) {
   return <p className="run-status">{text}</p>;
 }
 
-function BenchmarkBody({ onSelect }: { onSelect: () => void }) {
+function BenchmarkBody({ onOpenInspector }: { onOpenInspector: () => void }) {
   const { results, selected } = useBenchmarkResults();
   if (!results) return null;
 
@@ -113,7 +113,7 @@ function BenchmarkBody({ onSelect }: { onSelect: () => void }) {
           ))}
         </ul>
       )}
-      <BenchmarkViewer onSelect={onSelect} />
+      <BenchmarkViewer onOpenInspector={onOpenInspector} />
       {selected && <ClassTable condition={selected} threshold={results.display_threshold} lowN={results.low_n_objects} />}
     </>
   );

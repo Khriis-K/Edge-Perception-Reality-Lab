@@ -92,7 +92,7 @@ test("clicking a box shows it in the inspector", async ({ page }) => {
   await expect(inspector(page)).toContainText("LargeVehicle → PassengerCar");
   await expect(inspector(page)).toContainText("Confidence0.90");
   await expect(inspector(page)).toContainText("IoU1.00");
-  await expect(inspector(page)).toContainText("Label sourcedataset label “LargeVehicle”");
+  await expect(inspector(page)).toContainText(`Label sourcethe dataset's label file for frame ${SNOW_DAY}: “LargeVehicle”`);
   await expect(inspector(page)).toContainText("Error weight1");
   // The frame's counts, and this condition's AP beside clear weather in the same light.
   await expect(inspector(page)).toContainText("Error score3 (1 miss · 1 false alarm · 1 confusion)");

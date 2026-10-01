@@ -1,25 +1,12 @@
 import { Switch } from "@blueprintjs/core";
-import { useId, useState, type KeyboardEvent, type ReactNode } from "react";
-import { Link } from "react-router";
-import { datasetFrameUrl, type FrameDetail, type FrameScore } from "./api/client";
+import { useId, useState, type KeyboardEvent } from "react";
+import { datasetFrameUrl, type FrameDetail } from "./api/client";
 import { useBenchmarkFrame } from "./BenchmarkFrame";
 import { useBenchmarkResults } from "./BenchmarkResults";
-import { conditionName, formatMetric, parseThreshold } from "./benchmarkFormat";
-import {
-  clearCounterpart,
-  describeSelection,
-  levelAt,
-  overlayItems,
-  scoreParts,
-  sortFrames,
-  unmappedAt,
-  type FrameColumn,
-  type Layer,
-  type OverlayItem,
-  type Selection,
-  type SortDirection,
-} from "./frameReview";
-import { toOverlayRect, type Box } from "./overlay";
+import { conditionName, parseThreshold } from "./benchmarkFormat";
+import { levelAt, overlayItems, unmappedAt, type Layer, type OverlayItem } from "./frameReview";
+import { toOverlayRect } from "./overlay";
+
 
 const LAYERS: [layer: Layer, name: string][] = [
   ["labels", "Labels"],
@@ -30,16 +17,16 @@ const LAYERS: [layer: Layer, name: string][] = [
 /**
  * A Benchmark frame with its labels and predictions drawn over it, each tagged with its outcome. The frame arrives
  * matched at every threshold, so toggling layers or moving the threshold never asks the server again.
- * `onSelect` runs when a box is clicked, so the narrow layout can open its inspector drawer.
+ * `onOpenInspector` runs when a box is clicked, so the narrow layout can open its inspector drawer.
  */
-export function BenchmarkViewer({ onSelect }: { onSelect: () => void }) {
+export function BenchmarkViewer({ onOpenInspector }: { onOpenInspector: () => void }) {
   const { threshold } = useBenchmarkResults();
   const { frame, frameId, error, selectedKey, selectOverlay } = useBenchmarkFrame();
   const [shown, setShown] = useState<Record<Layer, boolean>>({ labels: true, predictions: true, regions: true });
 
   const select = (key: string) => {
     selectOverlay(key);
-    onSelect();
+    onOpenInspector();
   };
 
   return (
@@ -162,182 +149,3 @@ function OverlayBox({ item, selected, onSelect }: { item: OverlayItem; selected:
   );
 }
 
-/** The selected box, the open frame's counts, and this condition's per-class AP beside clear weather. */
-export function BenchmarkInspector() {
-  const { results, threshold, selected: condition } = useBenchmarkResults();
-  const { frame, selectedKey } = useBenchmarkFrame();
-  if (!results || !condition) return <p className="empty-state">Run a benchmark to inspect its frames.</p>;
-
-  const level = frame ? levelAt(frame.levels, threshold) : null;
-  return (
-    <section aria-label="Benchmark details" className="degradation-inspector benchmark-inspector">
-      {frame && level && (
-        <>
-          <SelectionDetails
-            frame={frame}
-            selected={selectedKey !== null}
-            selection={selectedKey === null ? null : describeSelection(frame, level, selectedKey)}
-          />
-          <FrameCounts score={level.score} threshold={threshold} />
-        </>
-      )}
-      <ClassComparison />
-    </section>
-  );
-}
-
-function SelectionDetails({
-  frame,
-  selected,
-  selection,
-}: {
-  frame: FrameDetail;
-  selected: boolean;
-  selection: Selection | null;
-}) {
-  if (!selected) return <p className="field-note">Click a box in the frame viewer to inspect it.</p>;
-  if (!selection) return <p className="field-note">The selected prediction is below the display threshold.</p>;
-  const { tag, truth, prediction, iou, weight } = selection;
-  return (
-    <div>
-      <h3 className="inspector-heading">Selected: {tag}</h3>
-      <dl className="metrics" aria-label="Selected detection">
-        <Row name="Class → predicted">
-          {truth ? truth.label : "no label"} → {prediction ? prediction.label : "nothing predicted"}
-        </Row>
-        <Row name="Confidence">{prediction ? prediction.confidence.toFixed(2) : "—"}</Row>
-        <Row name="IoU">{iou === null ? "—" : iou.toFixed(2)}</Row>
-        {prediction && <Row name="Predicted box">{boxText(prediction.box)}</Row>}
-        {truth && <Row name="Label box">{boxText(truth.box)}</Row>}
-        <Row name="Label source">
-          {truth ? `dataset label “${truth.label}” in frame ${frame.id}` : "none: no label here"}
-        </Row>
-        <Row name="Error weight">{weight}</Row>
-      </dl>
-    </div>
-  );
-}
-
-function FrameCounts({ score, threshold }: { score: FrameScore; threshold: number }) {
-  return (
-    <div>
-      <h3 className="inspector-heading">This frame at ≥ {threshold.toFixed(2)}</h3>
-      <dl className="metrics" aria-label="Frame counts">
-        <Row name="Hits">{score.hits}</Row>
-        <Row name="Misses">{score.misses}</Row>
-        <Row name="False alarms">{score.false_alarms}</Row>
-        <Row name="Class confusions">{score.class_confusions}</Row>
-        <Row name="Error score">
-          {score.score} ({scoreParts(score)})
-        </Row>
-      </dl>
-    </div>
-  );
-}
-
-function ClassComparison() {
-  const { results, selected: condition } = useBenchmarkResults();
-  if (!results || !condition) return null;
-  const clearName = clearCounterpart(condition.condition);
-  const clear = results.conditions.find((c) => c.condition === clearName);
-  const isClear = clearName === condition.condition;
-  const clearAp = (className: string) => clear?.classes.find((c) => c.class_name === className)?.ap ?? null;
-  return (
-    <div>
-      <h3 className="inspector-heading">
-        Per-class AP: {conditionName(condition.condition)}
-        {!isClear && ` vs. ${conditionName(clearName)}`}
-      </h3>
-      <dl className="metrics" aria-label="Per-class AP">
-        {condition.classes.map((row) => (
-          <Row key={row.class_name} name={row.class_name}>
-            {formatMetric(row.ap)}
-            {!isClear && ` vs. ${formatMetric(clearAp(row.class_name))} in clear weather`}
-          </Row>
-        ))}
-      </dl>
-      {!isClear && !clear && <p className="field-note">{conditionName(clearName)} is not in this run's manifest.</p>}
-      <p className="field-note">
-        <Link to="/findings">Compare every condition in Findings</Link>
-      </p>
-    </div>
-  );
-}
-
-function Row({ name, children }: { name: string; children: ReactNode }) {
-  return (
-    <div>
-      <dt>{name}</dt>
-      <dd className="metric-value">{children}</dd>
-    </div>
-  );
-}
-
-function boxText(box: Box): string {
-  return [box.x1, box.y1, box.x2, box.y2].map((v) => v.toFixed(3)).join(", ");
-}
-
-const COLUMNS: [column: FrameColumn, name: string][] = [
-  ["id", "Frame"],
-  ["hits", "Hits"],
-  ["misses", "Misses"],
-  ["false_alarms", "False alarms"],
-  ["class_confusions", "Class confusions"],
-  ["ignored", "Ignored"],
-  ["score", "Error score"],
-];
-
-/** The bottom dock's Frame table: the condition's frames and their error counts, sortable by any column. */
-export function FrameTable() {
-  const { selected: condition, results } = useBenchmarkResults();
-  const { ranked, frameId, openFrame } = useBenchmarkFrame();
-  const [sort, setSort] = useState<{ column: FrameColumn; direction: SortDirection }>({
-    column: "score",
-    direction: "descending",
-  });
-  if (!results || !condition) return <p className="empty-state">Run a benchmark to list its frames.</p>;
-
-  const rows = sortFrames(ranked, sort.column, sort.direction);
-  const toggle = (column: FrameColumn) =>
-    setSort({
-      column,
-      direction: sort.column === column && sort.direction === "descending" ? "ascending" : "descending",
-    });
-  return (
-    <table className="subset-table frame-table">
-      <caption>
-        {conditionName(condition.condition)}: {rows.length} frames at confidence ≥{" "}
-        {results.display_threshold.toFixed(2)}. Error score = misses + false alarms + class confusions.
-      </caption>
-      <thead>
-        <tr>
-          {COLUMNS.map(([column, name]) => (
-            <th key={column} scope="col" aria-sort={sort.column === column ? sort.direction : undefined}>
-              <button type="button" className="sort-button" onClick={() => toggle(column)}>
-                {name}
-                {sort.column === column && (sort.direction === "descending" ? " ▼" : " ▲")}
-              </button>
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row) => (
-          <tr key={row.id} aria-current={row.id === frameId ? "true" : undefined}>
-            <th scope="row">
-              <button type="button" className="link-button" onClick={() => openFrame(row.id)}>
-                {row.id}
-              </button>
-            </th>
-            <td>{row.hits}</td>
-            <td>{row.misses}</td>
-            <td>{row.false_alarms}</td>
-            <td>{row.class_confusions}</td>
-            <td>{row.ignored}</td>
-            <td>{row.score}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}

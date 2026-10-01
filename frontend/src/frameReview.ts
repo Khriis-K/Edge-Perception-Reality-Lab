@@ -3,13 +3,16 @@ import type { Box, Detection } from "./overlay";
 
 type Outcome = IndexedMatch["outcome"];
 
-/** Every overlay carries one of these, so its meaning never rests on color alone. */
-const TAGS: Record<Outcome, string> = {
-  hit: "HIT",
-  miss: "MISS",
-  false_alarm: "FALSE ALARM",
-  class_confusion: "CLASS ✕",
-  ignored: "IGNORED",
+/**
+ * Per outcome: its text tag (every overlay carries one, so meaning never rests on color alone), its tone, and which
+ * weight it adds to the frame's error score (hits and ignored predictions add nothing).
+ */
+const OUTCOMES: Record<Outcome, { tag: string; tone: Tone; weight: keyof FrameDetail["weights"] | null }> = {
+  hit: { tag: "HIT", tone: "ok", weight: null },
+  miss: { tag: "MISS", tone: "error", weight: "misses" },
+  false_alarm: { tag: "FALSE ALARM", tone: "error", weight: "false_alarms" },
+  class_confusion: { tag: "CLASS ✕", tone: "error", weight: "class_confusions" },
+  ignored: { tag: "IGNORED", tone: "neutral", weight: null },
 };
 const REGION_TAG = "IGNORE REGION";
 
@@ -76,13 +79,13 @@ export function overlayItems(frame: FrameDetail, level: FrameLevel): OverlayItem
   const labels = frame.truths.flatMap((truth, k): OverlayItem[] => {
     const match = truth.role === "object" ? labelMatch(level, k) : undefined;
     if (!match) return [];
-    return [{ key: `label-${k}`, layer: "labels", tone: tone(match.outcome), text: `${TAGS[match.outcome]} · ${truth.label}`, box: truth.box }];
+    return [{ key: `label-${k}`, layer: "labels", tone: OUTCOMES[match.outcome].tone, text: `${OUTCOMES[match.outcome].tag} · ${truth.label}`, box: truth.box }];
   });
   const predictions = frame.predictions.flatMap((prediction, i): OverlayItem[] => {
     const match = level.matches.find((m) => m.prediction === i);
     if (!match) return [];
-    const text = `${TAGS[match.outcome]} · ${prediction.label} ${prediction.confidence.toFixed(2)}`;
-    return [{ key: `prediction-${i}`, layer: "predictions", tone: tone(match.outcome), text, box: prediction.box }];
+    const text = `${OUTCOMES[match.outcome].tag} · ${prediction.label} ${prediction.confidence.toFixed(2)}`;
+    return [{ key: `prediction-${i}`, layer: "predictions", tone: OUTCOMES[match.outcome].tone, text, box: prediction.box }];
   });
   return [...regions, ...labels, ...predictions];
 }
@@ -95,12 +98,13 @@ export function describeSelection(frame: FrameDetail, level: FrameLevel, key: st
   }
   const match = kind === "label" ? labelMatch(level, index) : level.matches.find((m) => m.prediction === index);
   if (!match) return null;
+  const weightKey = OUTCOMES[match.outcome].weight;
   return {
-    tag: TAGS[match.outcome],
+    tag: OUTCOMES[match.outcome].tag,
     truth: match.truth === null ? null : frame.truths[match.truth],
     prediction: match.prediction === null ? null : frame.predictions[match.prediction],
     iou: match.iou ?? null,
-    weight: errorWeight(match.outcome, frame.weights),
+    weight: weightKey === null ? 0 : frame.weights[weightKey],
   };
 }
 
@@ -125,16 +129,4 @@ export function sortFrames(frames: FrameScore[], column: FrameColumn, direction:
 // A label's own match: the hit, confusion or miss on it. (An ignore region can forgive many predictions.)
 function labelMatch(level: FrameLevel, truth: number): IndexedMatch | undefined {
   return level.matches.find((m) => m.truth === truth && m.outcome !== "ignored");
-}
-
-function tone(outcome: Outcome): Tone {
-  return outcome === "hit" ? "ok" : outcome === "ignored" ? "neutral" : "error";
-}
-
-// Hits and ignored predictions add nothing to the score.
-function errorWeight(outcome: Outcome, weights: FrameDetail["weights"]): number {
-  if (outcome === "miss") return weights.misses;
-  if (outcome === "false_alarm") return weights.false_alarms;
-  if (outcome === "class_confusion") return weights.class_confusions;
-  return 0;
 }

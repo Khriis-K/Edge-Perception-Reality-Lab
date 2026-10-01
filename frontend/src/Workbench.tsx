@@ -2,7 +2,8 @@ import { Button, Drawer, Tab, Tabs } from "@blueprintjs/core";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Navigate, useParams } from "react-router";
 import { BenchmarkExplorer, BenchmarkRun } from "./Benchmark";
-import { BenchmarkInspector, FrameTable } from "./BenchmarkViewer";
+import { BenchmarkInspector } from "./BenchmarkInspector";
+import { FrameTable } from "./FrameTable";
 import { DatasetSetup } from "./DatasetSetup";
 import { DegradationInspector } from "./DegradationSettings";
 import { Rail } from "./Rail";
@@ -36,7 +37,7 @@ export function Workbench() {
       <Rail />
       <Explorer section={section} />
       {/* Selecting a box opens the drawer below 1280 px; at desktop width the panel is always there. */}
-      <WorkArea section={section} onSelect={() => setInspectorOpen(true)} />
+      <WorkArea section={section} onOpenInspector={() => setInspectorOpen(true)} />
       {section.id === "synthetic" && <Dock />}
       {section.id === "benchmark" && <BenchmarkDock />}
       {wide ? (
@@ -67,13 +68,13 @@ function Explorer({ section }: { section: Section }) {
   );
 }
 
-function WorkArea({ section, onSelect }: { section: Section; onSelect: () => void }) {
+function WorkArea({ section, onOpenInspector }: { section: Section; onOpenInspector: () => void }) {
   return (
     <main className="work-area">
       {/* Keyed by section so each section starts on its own tab set. */}
       {/* animate={false}: Blueprint's sliding indicator forces a transparent tab background. */}
       <Tabs id="work-tabs" key={section.id} className="tab-strip" animate={false}>
-        <Tab id="overview" title={section.id} panel={<Overview section={section} onSelect={onSelect} />} />
+        <Tab id="overview" title={section.id} panel={<Overview section={section} onOpenInspector={onOpenInspector} />} />
       </Tabs>
     </main>
   );
@@ -110,7 +111,7 @@ function BenchmarkDock() {
   );
 }
 
-function Overview({ section, onSelect }: { section: Section; onSelect: () => void }) {
+function Overview({ section, onOpenInspector }: { section: Section; onOpenInspector: () => void }) {
   return (
     <div className="work-body">
       <h1>{section.label}</h1>
@@ -119,7 +120,7 @@ function Overview({ section, onSelect }: { section: Section; onSelect: () => voi
       ) : section.id === "setup" ? (
         <DatasetSetup />
       ) : section.id === "benchmark" ? (
-        <BenchmarkRun onSelect={onSelect} />
+        <BenchmarkRun onOpenInspector={onOpenInspector} />
       ) : (
         <p className="empty-state">Nothing here yet.</p>
       )}
