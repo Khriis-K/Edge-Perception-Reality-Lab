@@ -1,8 +1,11 @@
 import { Button } from "@blueprintjs/core";
-import { useId, useState, type ChangeEvent } from "react";
+import { useState, type ChangeEvent } from "react";
 import type { ConditionResult, Job, Manifest } from "./api/client";
+import { useBenchmarkFrame } from "./BenchmarkFrame";
 import { useBenchmarkResults } from "./BenchmarkResults";
-import { conditionName, formatMetric, parseThreshold } from "./benchmarkFormat";
+import { BenchmarkViewer } from "./BenchmarkViewer";
+import { conditionName, formatMetric } from "./benchmarkFormat";
+import { scoreParts } from "./frameReview";
 import { isActive, useCurrentJob } from "./CurrentJob";
 import { useSubsetChoice } from "./SubsetChoice";
 import { useSubset } from "./SubsetTable";
@@ -10,9 +13,10 @@ import { useDatasetStatus } from "./useDatasetStatus";
 
 /**
  * Benchmark screen: run the detector over the subset chosen in Setup (or a saved manifest file), then read each
- * condition's per-class AP, and precision and recall at the display threshold.
+ * condition's per-class AP, and precision and recall at the display threshold, and review its frames.
+ * `onSelect` runs when a box in the frame viewer is clicked.
  */
-export function BenchmarkRun() {
+export function BenchmarkRun({ onSelect }: { onSelect: () => void }) {
   const { status } = useDatasetStatus();
   const ready = status?.ready ?? false;
   const [choice] = useSubsetChoice();
@@ -77,7 +81,7 @@ export function BenchmarkRun() {
             {message}
           </p>
         ))}
-      {results && <BenchmarkBody />}
+      {results && <BenchmarkBody onSelect={onSelect} />}
     </div>
   );
 }
@@ -96,10 +100,8 @@ function BenchmarkStatus({ job }: { job: Job | null }) {
   return <p className="run-status">{text}</p>;
 }
 
-function BenchmarkBody() {
-  const { results, threshold, setThreshold, selected } = useBenchmarkResults();
-  const [text, setText] = useState(String(threshold));
-  const thresholdId = useId();
+function BenchmarkBody({ onSelect }: { onSelect: () => void }) {
+  const { results, selected } = useBenchmarkResults();
   if (!results) return null;
 
   return (
@@ -111,23 +113,7 @@ function BenchmarkBody() {
           ))}
         </ul>
       )}
-      <div className="field threshold-field">
-        <label htmlFor={thresholdId}>Display threshold</label>
-        <input
-          id={thresholdId}
-          className="bp6-input"
-          type="number"
-          min={0}
-          max={1}
-          step={0.05}
-          value={text}
-          onChange={(e) => {
-            setText(e.target.value);
-            const value = parseThreshold(e.target.value);
-            if (value !== null) setThreshold(value);
-          }}
-        />
-      </div>
+      <BenchmarkViewer onSelect={onSelect} />
       {selected && <ClassTable condition={selected} threshold={results.display_threshold} lowN={results.low_n_objects} />}
     </>
   );
@@ -169,9 +155,15 @@ function ClassTable({ condition, threshold, lowN }: { condition: ConditionResult
   );
 }
 
-/** Benchmark's explorer: every condition in the run's manifest with its mAP, then the manifest and model. */
+const SHOWN_FRAMES = 10; // per expanded condition; the rest are in the dock's Frame table
+
+/**
+ * Benchmark's explorer: every condition in the run's manifest with its mAP, then the manifest and model. Clicking a
+ * condition selects and expands it to its frames, worst first; clicking it again collapses it.
+ */
 export function BenchmarkExplorer({ empty }: { empty: string }) {
   const { results, selected, select } = useBenchmarkResults();
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   // A load error is shown in the work area; results already loaded stay listed beside it.
   if (!results) return <p className="empty-state">{empty}</p>;
@@ -185,7 +177,11 @@ export function BenchmarkExplorer({ empty }: { empty: string }) {
               type="button"
               className="run-item"
               aria-current={row.condition === selected?.condition ? "true" : undefined}
-              onClick={() => select(row.condition)}
+              aria-expanded={row.condition === expanded}
+              onClick={() => {
+                select(row.condition);
+                setExpanded(row.condition === expanded ? null : row.condition);
+              }}
             >
               <span>{conditionName(row.condition)}</span>
               <span className="run-meta">
@@ -198,10 +194,12 @@ export function BenchmarkExplorer({ empty }: { empty: string }) {
                 )}
               </span>
             </button>
+            {row.condition === expanded && row.condition === selected?.condition && <FrameList />}
           </li>
         ))}
       </ul>
       <footer className="cache-info">
+        <span>Frames ranked by error score at confidence ≥ {results.display_threshold.toFixed(2)}</span>
         <span>
           Manifest: seed {manifest.seed}, up to {manifest.cap} per condition, vocabulary v{manifest.vocabulary_version}
         </span>
@@ -210,5 +208,34 @@ export function BenchmarkExplorer({ empty }: { empty: string }) {
         </span>
       </footer>
     </div>
+  );
+}
+
+/** The selected condition's worst frames, each with its score and what it is made of. */
+function FrameList() {
+  const { ranked, frameId, openFrame } = useBenchmarkFrame();
+  if (ranked.length === 0) return <p className="frame-list-note">No frames.</p>;
+  const more = ranked.length - SHOWN_FRAMES;
+  return (
+    <>
+      <ul aria-label="Frames, worst first" className="frame-list">
+        {ranked.slice(0, SHOWN_FRAMES).map((frame) => (
+          <li key={frame.id}>
+            <button
+              type="button"
+              className="run-item frame-item"
+              aria-current={frame.id === frameId ? "true" : undefined}
+              onClick={() => openFrame(frame.id)}
+            >
+              <span>{frame.id}</span>
+              <span className="run-meta">
+                score {frame.score} · {scoreParts(frame)}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {more > 0 && <p className="frame-list-note">+ {more} more in the Frame table</p>}
+    </>
   );
 }

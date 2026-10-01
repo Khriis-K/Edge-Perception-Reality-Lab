@@ -7,7 +7,15 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Res
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from backend.benchmark_run import BenchmarkResults, ManifestRefused, benchmark_results, check_manifest
+from backend.benchmark_run import (
+    BenchmarkResults,
+    FrameDetail,
+    ManifestRefused,
+    benchmark_results,
+    check_manifest,
+    find_frame,
+    frame_detail,
+)
 from backend.class_mapping import CLASS_MAPPING, ClassMapping
 from backend.dataset import DatasetIndex, FrameNotFound, camera_image, check_readiness, index_dataset
 from backend.degradations import KINDS, RANDOMIZED, TITLES, DegradationKind, parameters
@@ -368,6 +376,19 @@ def get_benchmark_results(
     if experiment is None:
         raise HTTPException(status_code=404, detail="No completed benchmark with that id.")
     return benchmark_results(experiment, display_threshold)
+
+
+@router.get("/benchmark/experiments/{experiment_id}/frames/{frame_id}")
+def get_benchmark_frame(experiment_id: str, frame_id: str, jobs: Jobs) -> FrameDetail:
+    """One frame's predictions and labels, matched at every display threshold, so the frame viewer can change
+    threshold or toggle overlays without asking again. Its image is /api/dataset/frames/{frame_id}."""
+    experiment = jobs.cache.load_benchmark(experiment_id)
+    if experiment is None:
+        raise HTTPException(status_code=404, detail="No completed benchmark with that id.")
+    found = find_frame(experiment, frame_id)
+    if found is None:
+        raise HTTPException(status_code=404, detail="No such frame in this benchmark.")
+    return frame_detail(*found)
 
 
 @router.get("/benchmark/class-mapping")

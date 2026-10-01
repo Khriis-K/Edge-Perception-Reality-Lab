@@ -22,6 +22,10 @@ Worst-frame score, per frame, at the display threshold:
     misses x 1 + false alarms x 1 + class confusions x 1
 Hits and ignored predictions add nothing.
 
+A frame's levels are its outcomes at every display threshold: one with no prediction shown, then one per distinct
+confidence among its mapped predictions, highest first. Each level is matched afresh, as the frame scores are, so the
+frame viewer can change threshold without asking the server again.
+
 Every metric carries its object and frame counts (for a class, the frames holding at least one of its objects), and
 is flagged low n below LOW_N_OBJECTS objects. A condition is low n when a class in its mAP (one with objects) is, or
 when it has no objects and so no mAP; a class with no objects is left out of mAP, so it doesn't flag the condition.
@@ -73,15 +77,33 @@ class BenchmarkMatch(BaseModel):
     iou: float | None = None  # for a spatial match: hit, class confusion or ignored (though IoU doesn't decide that)
 
 
-class FrameBenchmark(BaseModel):
+class IndexedMatch(BaseModel):
+    """A match by position: `prediction` indexes the predictions matched, `truth` the frame's truths."""
+
+    outcome: Outcome
+    prediction: int | None
+    truth: int | None  # the ignore region, for an ignored prediction
+    iou: float | None = None
+
+
+class FrameScore(BaseModel):
     id: str
-    matches: list[BenchmarkMatch]
     hits: int
     misses: int
     false_alarms: int
     class_confusions: int
     ignored: int
     score: float  # the weighted sum of misses, false alarms and class confusions
+
+
+class FrameBenchmark(FrameScore):
+    matches: list[BenchmarkMatch]
+
+
+class FrameLevel(BaseModel):
+    min_confidence: float | None  # predictions at or above it are shown; None: none are
+    score: FrameScore
+    matches: list[IndexedMatch]  # prediction indexes the frame's mapped predictions
 
 
 class PRPoint(BaseModel):
@@ -119,35 +141,47 @@ class ConditionMetrics(BaseModel):
 def match_frame(predictions: list[Detection], truths: list[GroundTruth]) -> list[BenchmarkMatch]:
     """Match one frame's predictions, already mapped to dataset classes, to its ground truth. Thresholding is the
     caller's job."""
-    objects = [t for t in truths if truth_role(t.label) == "object"]
-    regions = [t for t in truths if truth_role(t.label) == "ignore"]
+    return [
+        BenchmarkMatch(
+            outcome=m.outcome,
+            prediction=None if m.prediction is None else predictions[m.prediction],
+            truth=None if m.truth is None else truths[m.truth],
+            iou=m.iou,
+        )
+        for m in match_indices(predictions, truths)
+    ]
+
+
+def match_indices(predictions: list[Detection], truths: list[GroundTruth]) -> list[IndexedMatch]:
+    """match_frame, by position: predictions in descending confidence, then misses in truth order."""
+    objects = [k for k, t in enumerate(truths) if truth_role(t.label) == "object"]
+    regions = [k for k, t in enumerate(truths) if truth_role(t.label) == "ignore"]
     order = sorted(range(len(predictions)), key=lambda i: (-predictions[i].confidence, i))
-    free = set(range(len(objects)))
-    matched: dict[int, BenchmarkMatch] = {}
+    free = set(objects)
+    matched: dict[int, IndexedMatch] = {}
 
     for same_class, outcome in ((True, "hit"), (False, "class_confusion")):
         for i in order:
             if i in matched:
                 continue
-            candidates = [(j, objects[j]) for j in free if (objects[j].label == predictions[i].label) == same_class]
+            candidates = [(k, truths[k]) for k in free if (truths[k].label == predictions[i].label) == same_class]
             best = _best_overlap(predictions[i].box, candidates, iou, IOU_THRESHOLD)
             if best is not None:
-                j, overlap = best
-                free.remove(j)
-                matched[i] = BenchmarkMatch(outcome=outcome, prediction=predictions[i], truth=objects[j], iou=overlap)
+                k, overlap = best
+                free.remove(k)
+                matched[i] = IndexedMatch(outcome=outcome, prediction=i, truth=k, iou=overlap)
 
     for i in order:
         if i in matched:
             continue
-        best = _best_overlap(predictions[i].box, list(enumerate(regions)), share_inside, IGNORE_SHARE)
+        best = _best_overlap(predictions[i].box, [(k, truths[k]) for k in regions], share_inside, IGNORE_SHARE)
         if best is None:
-            matched[i] = BenchmarkMatch(outcome="false_alarm", prediction=predictions[i], truth=None)
+            matched[i] = IndexedMatch(outcome="false_alarm", prediction=i, truth=None)
         else:
-            j, _ = best
-            overlap = iou(predictions[i].box, regions[j].box)
-            matched[i] = BenchmarkMatch(outcome="ignored", prediction=predictions[i], truth=regions[j], iou=overlap)
+            k, _ = best
+            matched[i] = IndexedMatch(outcome="ignored", prediction=i, truth=k, iou=iou(predictions[i].box, truths[k].box))
 
-    misses = [BenchmarkMatch(outcome="miss", prediction=None, truth=objects[j]) for j in sorted(free)]
+    misses = [IndexedMatch(outcome="miss", prediction=None, truth=k) for k in sorted(free)]
     return [matched[i] for i in order] + misses
 
 
@@ -174,15 +208,19 @@ def _best_overlap(
 
 
 def frame_benchmark(frame_id: str, matches: list[BenchmarkMatch]) -> FrameBenchmark:
-    count = {outcome: sum(m.outcome == outcome for m in matches) for outcome in get_args(Outcome)}
+    score = frame_score(frame_id, [m.outcome for m in matches])
+    return FrameBenchmark(**score.model_dump(), matches=matches)
+
+
+def frame_score(frame_id: str, outcomes: list[Outcome]) -> FrameScore:
+    count = {outcome: outcomes.count(outcome) for outcome in get_args(Outcome)}
     score = (
         WEIGHTS.misses * count["miss"]
         + WEIGHTS.false_alarms * count["false_alarm"]
         + WEIGHTS.class_confusions * count["class_confusion"]
     )
-    return FrameBenchmark(
+    return FrameScore(
         id=frame_id,
-        matches=matches,
         hits=count["hit"],
         misses=count["miss"],
         false_alarms=count["false_alarm"],
@@ -190,6 +228,22 @@ def frame_benchmark(frame_id: str, matches: list[BenchmarkMatch]) -> FrameBenchm
         ignored=count["ignored"],
         score=score,
     )
+
+
+def frame_levels(frame_id: str, predictions: list[Detection], truths: list[GroundTruth]) -> list[FrameLevel]:
+    """The frame's outcomes at every display threshold. `predictions` are already mapped to dataset classes; the
+    levels' prediction indexes point into it. A threshold t shows the last level whose min_confidence is >= t, or the
+    first (nothing shown) when there is none."""
+    levels = []
+    for cutoff in [None, *sorted({p.confidence for p in predictions}, reverse=True)]:
+        shown = [i for i, p in enumerate(predictions) if cutoff is not None and p.confidence >= cutoff]
+        matches = [
+            m.model_copy(update={"prediction": None if m.prediction is None else shown[m.prediction]})
+            for m in match_indices([predictions[i] for i in shown], truths)
+        ]
+        score = frame_score(frame_id, [m.outcome for m in matches])
+        levels.append(FrameLevel(min_confidence=cutoff, score=score, matches=matches))
+    return levels
 
 
 def pr_curve(scored: list[tuple[float, bool]], objects: int) -> list[PRPoint]:

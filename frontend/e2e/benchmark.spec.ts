@@ -3,7 +3,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { BENCHMARK_PORT } from "../playwright.config";
 
 // On the fixture dataset with the stub runner, on a server of this file's own (see playwright.config.ts). The stub
-// finds the bright car the fixture draws in clear-day, fog-night and rain-night; everything else is missed.
+// finds the bright car the fixture draws in clear-day, fog-night and rain-night. In clear-night and snow-day the bright
+// block is over a LargeVehicle, so the stub's car is a class confusion; everything else is missed.
 test.use({ baseURL: `http://127.0.0.1:${BENCHMARK_PORT}` });
 
 const explorer = (page: Page) => page.getByRole("complementary", { name: "Explorer" });

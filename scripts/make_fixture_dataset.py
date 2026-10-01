@@ -7,9 +7,9 @@ Mirrors the three parts the app reads, as laid out in the real dataset:
 
 Everything is generated here, never copied from the real dataset. Output is byte-for-byte deterministic.
 
-Images are a flat grey, except that a PassengerCar listed first is drawn as a bright block exactly over its label box.
-The stub detector finds such a block as a car, so a Benchmark run on the fixture has hits, misses, a false alarm and
-a forgiven (ignored) prediction to score.
+Images are a flat grey, except that a PassengerCar or LargeVehicle listed first is drawn as a bright block exactly over
+its label box. The stub detector finds such a block as a car, so a Benchmark run on the fixture has hits, misses, false
+alarms, a class confusion (the car on snow-day's LargeVehicle) and a forgiven (ignored) prediction to score.
 """
 
 import json
@@ -24,6 +24,7 @@ BRIGHT = 240  # at or above the stub detector's brightness cut
 # both snow words. Then the cases the adapter must exclude and count: fog plus snow, twilight, and a malformed label
 # line. Objects cover every mapped class and both fallback classes.
 MALFORMED = "PassengerCar 0.00 0 not-a-number"
+DRAWN = ("PassengerCar", "LargeVehicle")  # classes drawn bright when listed first
 SAMPLES = [
     # id, fog, precipitation, daytime, twilight, objects
     ("2018-02-03_10-00-00_00100", None, None, "day", False, ["PassengerCar", "Pedestrian"]),
@@ -49,7 +50,7 @@ def build_fixture_dataset(root: Path) -> list[str]:
         folder.mkdir(parents=True, exist_ok=True)
 
     for index, (sample_id, fog, precipitation, daytime, twilight, objects) in enumerate(SAMPLES):
-        car = _box(0) if objects[0] == "PassengerCar" else None
+        car = _box(0) if objects[0] in DRAWN else None
         (images / f"{sample_id}.png").write_bytes(_png(shade=40 + 20 * index, car=car))
         # newline="\n" keeps the files identical on Windows and elsewhere.
         label_text = "".join(_label_line(obj, i) + "\n" for i, obj in enumerate(objects))

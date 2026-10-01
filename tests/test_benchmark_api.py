@@ -101,7 +101,7 @@ def test_results_list_every_condition_with_map_objects_and_low_n(tmp_path, root)
     # A car and an Obstacle ignore region: the stub's stray person falls inside the region and is forgiven.
     assert condition(body, "fog-night")["map"] == 1.0
     assert condition(body, "fog-night")["objects"] == 1
-    # No car drawn: everything is missed.
+    # The stub's car lands on a LargeVehicle: a class confusion, not a hit. Nothing is found.
     assert condition(body, "snow-day")["map"] == 0.0
     assert body["low_n_objects"] == 30
     assert body["iou_threshold"] == 0.5
