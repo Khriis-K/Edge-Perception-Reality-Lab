@@ -1,7 +1,8 @@
 import type { SyntheticFramesResults } from "./api/client";
-import { ClassTable } from "./Benchmark";
+import { ClassTable, ThresholdField } from "./Benchmark";
 import { conditionName } from "./benchmarkFormat";
 import { StabilityMetrics } from "./Stability";
+import { useSyntheticResults } from "./SyntheticResults";
 
 /**
  * A Synthetic run on the subset's clear frames. The frames are labelled, so it has both metric sets: stability against
@@ -10,6 +11,7 @@ import { StabilityMetrics } from "./Stability";
  */
 export function SyntheticFramesView({ results }: { results: SyntheticFramesResults }) {
   const { stability, clean, degraded, degradation } = results;
+  const { framesThreshold, setFramesThreshold } = useSyntheticResults();
   const frames = `${conditionName(results.condition)} frames`;
   return (
     <section aria-label="Results on dataset frames" className="synthetic-frames">
@@ -31,6 +33,7 @@ export function SyntheticFramesView({ results }: { results: SyntheticFramesResul
         Scored as in Benchmark mode, at IoU ≥ {results.iou_threshold.toFixed(2)}. The clean side is the Benchmark's own{" "}
         {conditionName(results.condition)} condition on these frames.
       </p>
+      <ThresholdField threshold={framesThreshold} onChange={setFramesThreshold} />
       <ClassTable
         title={`Clean ${frames}`}
         condition={clean}

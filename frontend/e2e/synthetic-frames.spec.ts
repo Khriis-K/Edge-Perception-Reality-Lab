@@ -78,6 +78,33 @@ test("the degraded condition appears in the Benchmark condition tree beside the 
   );
 });
 
+test("changing the display threshold rescores precision and recall without re-running", async ({ page }) => {
+  const starts: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "POST" && new URL(request.url()).pathname.endsWith("/jobs")) starts.push(request.url());
+  });
+  await page.goto("/synthetic");
+  await runFogOnClearFrames(page);
+  const pedestrian = (table: number) =>
+    resultsView(page)
+      .getByRole("table")
+      .nth(table)
+      .getByRole("row")
+      .filter({ has: page.getByRole("rowheader", { name: "Pedestrian", exact: true }) });
+
+  const threshold = resultsView(page).getByRole("spinbutton", { name: "Display threshold" });
+  await expect(threshold).toHaveValue("0.25");
+  // The stub's person at 0.3 is shown, and it is a false alarm: precision 0.
+  await expect(pedestrian(0).getByRole("cell")).toHaveText(["1", "1", "0.00", "0.00", "0.00", "low n"]);
+
+  await threshold.fill("0.5");
+  // Nothing is predicted at 0.5 in either variant, so precision is undefined, not zero. AP doesn't move.
+  await expect(pedestrian(0).getByRole("cell")).toHaveText(["1", "1", "0.00", "—", "0.00", "low n"]);
+  await expect(pedestrian(1).getByRole("cell")).toHaveText(["1", "1", "0.00", "—", "0.00", "low n"]);
+  await expect(resultsView(page).getByRole("table").nth(0).locator("caption")).toContainText("confidence ≥ 0.50");
+  expect(starts).toHaveLength(1);
+});
+
 test("running the same degradation again reuses the cached results", async ({ page }) => {
   await page.goto("/synthetic");
   await runFogOnClearFrames(page);

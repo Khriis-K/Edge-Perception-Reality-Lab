@@ -98,8 +98,6 @@ function BenchmarkStatus({ job }: { job: Job | null }) {
 
 function BenchmarkBody() {
   const { results, threshold, setThreshold, selected } = useBenchmarkResults();
-  const [text, setText] = useState(String(threshold));
-  const thresholdId = useId();
   if (!results) return null;
 
   return (
@@ -111,23 +109,7 @@ function BenchmarkBody() {
           ))}
         </ul>
       )}
-      <div className="field threshold-field">
-        <label htmlFor={thresholdId}>Display threshold</label>
-        <input
-          id={thresholdId}
-          className="bp6-input"
-          type="number"
-          min={0}
-          max={1}
-          step={0.05}
-          value={text}
-          onChange={(e) => {
-            setText(e.target.value);
-            const value = parseThreshold(e.target.value);
-            if (value !== null) setThreshold(value);
-          }}
-        />
-      </div>
+      <ThresholdField threshold={threshold} onChange={setThreshold} />
       {selected && (
         <ClassTable
           title={"experiment_id" in selected ? syntheticName(selected) : conditionName(selected.condition)}
@@ -137,6 +119,32 @@ function BenchmarkBody() {
         />
       )}
     </>
+  );
+}
+
+/** The confidence precision and recall are counted at. Changing it re-scores stored detections; nothing re-runs. */
+export function ThresholdField({ threshold, onChange }: { threshold: number; onChange: (value: number) => void }) {
+  // The typed text, kept apart from the value so a half-typed number like "0." stays in the box.
+  const [text, setText] = useState(String(threshold));
+  const id = useId();
+  return (
+    <div className="field threshold-field">
+      <label htmlFor={id}>Display threshold</label>
+      <input
+        id={id}
+        className="bp6-input"
+        type="number"
+        min={0}
+        max={1}
+        step={0.05}
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value);
+          const value = parseThreshold(e.target.value);
+          if (value !== null) onChange(value);
+        }}
+      />
+    </div>
   );
 }
 

@@ -10,8 +10,8 @@ import {
 } from "./api/client";
 import { useCurrentJob } from "./CurrentJob";
 
-// Precision and recall on dataset frames are shown at this confidence, as in the frame viewer and Benchmark.
-export const FRAMES_DISPLAY_THRESHOLD = 0.25;
+// Precision and recall on dataset frames start at this confidence, as in the frame viewer and Benchmark.
+const DEFAULT_FRAMES_THRESHOLD = 0.25;
 
 interface Results {
   experiment: Experiment;
@@ -25,6 +25,9 @@ interface SyntheticResultsState {
   results: Results | null;
   /** A run on dataset frames: stability and both variants' accuracy. It has no frame images. */
   framesResults: SyntheticFramesResults | null;
+  /** Precision and recall on dataset frames are counted at this confidence; the server re-scores, never re-runs. */
+  framesThreshold: number;
+  setFramesThreshold: (threshold: number) => void;
   error: string | null;
   /** The experiment on screen: the latest run's once it completes, or one picked from the run history. */
   openId: string | null;
@@ -49,6 +52,7 @@ export function SyntheticResultsProvider({ children }: { children: ReactNode }) 
   const [open, setOpen] = useState<{ id: string; input: Input } | null>(null);
   const [results, setResults] = useState<Results | null>(null);
   const [framesResults, setFramesResults] = useState<SyntheticFramesResults | null>(null);
+  const [framesThreshold, setFramesThreshold] = useState(DEFAULT_FRAMES_THRESHOLD);
   const [error, setError] = useState<string | null>(null);
   // Tagged with its experiment, so a new run starts on its first frame.
   const [frame, setFrame] = useState({ experimentId: "", index: 0 });
@@ -62,17 +66,29 @@ export function SyntheticResultsProvider({ children }: { children: ReactNode }) 
     setResults(null);
     setFramesResults(null);
     setError(null);
-    if (!open) return;
+  }, [open]);
+
+  useEffect(() => {
+    if (open?.input !== "video") return;
     const controller = new AbortController();
-    const loading =
-      open.input === "video"
-        ? Promise.all([fetchExperiment(open.id), fetchStability(open.id)]).then(
-            ([experiment, stability]) => !controller.signal.aborted && setResults({ experiment, stability }),
-          )
-        : fetchSyntheticFramesResults(open.id, FRAMES_DISPLAY_THRESHOLD, controller.signal).then(setFramesResults);
-    loading.catch((e) => !controller.signal.aborted && setError(`Could not load the results: ${(e as Error).message}`));
+    Promise.all([fetchExperiment(open.id), fetchStability(open.id)])
+      .then(([experiment, stability]) => !controller.signal.aborted && setResults({ experiment, stability }))
+      .catch((e) => !controller.signal.aborted && setError(`Could not load the results: ${(e as Error).message}`));
     return () => controller.abort();
   }, [open]);
+
+  // Results already on screen stay while a new threshold is scored, as in Benchmark.
+  useEffect(() => {
+    if (open?.input !== "dataset") return;
+    const controller = new AbortController();
+    fetchSyntheticFramesResults(open.id, framesThreshold, controller.signal)
+      .then((body) => {
+        setFramesResults(body);
+        setError(null);
+      })
+      .catch((e) => !controller.signal.aborted && setError(`Could not load the results: ${(e as Error).message}`));
+    return () => controller.abort();
+  }, [open, framesThreshold]);
 
   const openExperiment = useCallback((id: string, input: Input) => setOpen({ id, input }), []);
   const experimentId = results?.experiment.id ?? "";
@@ -84,6 +100,8 @@ export function SyntheticResultsProvider({ children }: { children: ReactNode }) 
       value={{
         results,
         framesResults,
+        framesThreshold,
+        setFramesThreshold,
         error,
         openId: open?.id ?? null,
         openExperiment,
