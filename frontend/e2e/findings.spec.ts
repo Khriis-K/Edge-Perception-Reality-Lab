@@ -101,6 +101,34 @@ test("finding 02's heatmap keeps day and night apart and marks low-n cells", asy
   await expect(page.getByRole("img", { name: /Stability score for each/ })).toHaveCount(0);
 });
 
+test("finding 03 overlays a class's PR curves, labels each in text, and switches class without asking again", async ({
+  page,
+}) => {
+  await openBenchmarkFindings(page);
+  const pr = finding(page, "Finding 03 · Precision–recall");
+  await expect(explorer(page).getByRole("list", { name: "Outline" })).toContainText("03 · Precision–recall");
+  await expect(pr.getByRole("textbox", { name: "Headline for Finding 03 · Precision–recall" })).toBeVisible();
+
+  // Clear-day's one car is found at 0.9: one point, at precision 1 and recall 1, ringed at the 0.25 display threshold.
+  await expect(pr.getByRole("img", { name: /^Precision-recall curves for PassengerCar/ })).toBeVisible();
+  const curves = pr.getByRole("list", { name: "Curves" }).getByRole("listitem");
+  await expect(curves).toHaveText([
+    "Clear · day: AP 1.00 over 1 object (low n); at ≥ 0.25, precision 1.00 and recall 1.00",
+    /^Synthetic fog/, // another spec may already have run synthetic fog on this manifest
+    "Real fog · day: no objects of this class, so no curve",
+  ]);
+
+  const requests: string[] = [];
+  page.on("request", (request) => requests.push(request.url()));
+  await pr.getByLabel("Class").selectOption("Pedestrian");
+  await expect(pr.getByRole("img", { name: /^Precision-recall curves for Pedestrian/ })).toBeVisible();
+  // The person at 0.3 misses the one pedestrian.
+  await expect(curves.first()).toHaveText(
+    "Clear · day: AP 0.00 over 1 object (low n); at ≥ 0.25, precision 0.00 and recall 0.00",
+  );
+  expect(requests).toEqual([]);
+});
+
 test("the inspector shows the run record, latency and what to read first", async ({ page }) => {
   await openBenchmarkFindings(page);
 

@@ -1,5 +1,5 @@
 """API contract tests for Findings: the runs it can open, each run's findings document (sim-to-real drops, the
-condition-by-class heatmap, worst frames, the video reliability timeline, the run record and limitations), and the
+condition-by-class heatmap, precision-recall curves, worst frames, the video reliability timeline, the run record and limitations), and the
 user's headlines, stored with the run.
 
 On the fixture dataset with the stub runner (see tests/test_benchmark_api.py): clear-day's car is a hit and its
@@ -108,6 +108,62 @@ def test_without_clear_day_frames_there_is_nothing_to_compare(client):
     sim = findings(client, benchmark["experiment_id"])["sim_to_real"]
 
     assert sim == {"reference": None, "real": None, "synthetic": []}
+
+
+# --- precision-recall -------------------------------------------------------------------------------------
+
+
+def curve(side, name):
+    return next(c for c in side["classes"] if c["class_name"] == name)
+
+
+def test_pr_curves_set_clear_day_beside_synthetic_fog_and_real_fog_with_hand_checked_points(client):
+    benchmark = run_benchmark(client)
+    fog = run_synthetic_frames(client, degradation=FOG)
+
+    curves = findings(client, benchmark["experiment_id"])["pr_curves"]
+
+    reference = curves["reference"]
+    assert (reference["title"], reference["condition"], reference["experiment_id"]) == ("Clear · day", "clear-day", None)
+    # Clear-day: the stub's car (0.9) is the one car's hit; its person (0.3) misses the one pedestrian.
+    car = curve(reference, "PassengerCar")
+    assert car["pr_curve"] == [{"threshold": 0.9, "precision": 1.0, "recall": 1.0}]
+    assert (car["ap"], car["objects"], car["precision"], car["recall"]) == (1.0, 1, 1.0, 1.0)
+    pedestrian = curve(reference, "Pedestrian")
+    assert pedestrian["pr_curve"] == [{"threshold": 0.3, "precision": 0.0, "recall": 0.0}]
+    assert (pedestrian["precision"], pedestrian["recall"]) == (0.0, 0.0)
+    [synthetic] = curves["synthetic"]
+    assert (synthetic["title"], synthetic["experiment_id"]) == ("Synthetic fog 0.60", fog["experiment_id"])
+    assert curve(synthetic, "PassengerCar")["pr_curve"] == car["pr_curve"]
+    # Fog-day: nothing is predicted, so its one RidableVehicle has AP 0 and no curve at all.
+    real = curves["real"]
+    assert (real["title"], real["condition"], real["experiment_id"]) == ("Real fog · day", "fog-day", None)
+    ridable = curve(real, "RidableVehicle")
+    assert (ridable["pr_curve"], ridable["ap"], ridable["objects"]) == ([], 0.0, 1)
+
+
+def test_pr_curves_are_the_benchmarks_own_and_mark_the_display_threshold(client):
+    benchmark = run_benchmark(client)
+    scored = benchmark_results(client, benchmark["experiment_id"], display_threshold=0.5)
+
+    curves = findings(client, benchmark["experiment_id"], display_threshold=0.5)["pr_curves"]
+
+    clear_day = next(c for c in scored["conditions"] if c["condition"] == "clear-day")
+    assert curves["reference"]["classes"] == clear_day["classes"]
+    # At 0.5 the person (0.3) is no longer shown: no precision to mark, and recall stays 0.
+    pedestrian = curve(curves["reference"], "Pedestrian")
+    assert (pedestrian["precision"], pedestrian["recall"]) == (None, 0.0)
+    assert pedestrian["pr_curve"] == [{"threshold": 0.3, "precision": 0.0, "recall": 0.0}]
+
+
+def test_without_clear_day_frames_there_are_no_curves_to_overlay(client):
+    manifest = subset_manifest(client)
+    manifest["frames"]["clear-day"] = []
+    benchmark = run_benchmark(client, manifest)
+
+    curves = findings(client, benchmark["experiment_id"])["pr_curves"]
+
+    assert curves == {"reference": None, "real": None, "synthetic": []}
 
 
 # --- where it fails: the condition-by-class heatmap ------------------------------------------------------
@@ -329,6 +385,15 @@ def test_each_finding_keeps_its_own_headline_and_a_blank_one_clears_it(client):
 
     assert response.json() == {"where-it-fails": "Two."}
     assert findings(client, experiment_id)["headlines"] == {"where-it-fails": "Two."}
+
+
+def test_a_benchmark_run_takes_a_precision_recall_headline(client):
+    benchmark = run_benchmark(client)
+
+    response = put_headline(client, benchmark["experiment_id"], "precision-recall", "Real fog caps recall.")
+
+    assert response.status_code == 200, response.text
+    assert findings(client, benchmark["experiment_id"])["headlines"] == {"precision-recall": "Real fog caps recall."}
 
 
 def test_a_video_run_takes_a_timeline_headline_but_not_a_benchmark_one(video_client):

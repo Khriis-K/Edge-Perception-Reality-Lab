@@ -1,4 +1,4 @@
-import type { BenchmarkFindings, FrameReliability, FrameScore, HeatmapCell, VideoFindings } from "./api/client";
+import type { BenchmarkFindings, ClassMetrics, FrameReliability, FrameScore, HeatmapCell, VideoFindings } from "./api/client";
 import { formatMetric } from "./benchmarkFormat";
 
 type BenchmarkWeights = BenchmarkFindings["record"]["weights"];
@@ -48,6 +48,20 @@ export function reliabilityReason(point: FrameReliability, weights: StabilityWei
 export function heatmapCellText(cell: HeatmapCell): string {
   if (cell.ap === null) return formatMetric(null);
   return `${formatMetric(cell.ap)}${cell.low_n ? "*" : ""}`;
+}
+
+/**
+ * A PR curve's label in text, so no curve is told apart by color alone: its side, AP over its objects, and its point at
+ * the display threshold, or why it has no point or no curve.
+ */
+export function curveSummary(name: string, metrics: ClassMetrics, threshold: number): string {
+  if (metrics.objects === 0) return `${name}: no objects of this class, so no curve`;
+  const objects = `${metrics.objects} ${plural(metrics.objects, "object", "objects")}${metrics.low_n ? " (low n)" : ""}`;
+  const head = `${name}: AP ${formatMetric(metrics.ap)} over ${objects}`;
+  if (metrics.pr_curve.length === 0) return `${head}; nothing predicted, so no curve`;
+  const at = `≥ ${threshold.toFixed(2)}`;
+  if (metrics.precision === null) return `${head}; nothing shown at ${at}`;
+  return `${head}; at ${at}, precision ${formatMetric(metrics.precision)} and recall ${formatMetric(metrics.recall)}`;
 }
 
 function plural(count: number, one: string, many: string): string {

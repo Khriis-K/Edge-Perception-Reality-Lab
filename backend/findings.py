@@ -10,6 +10,9 @@ Both sides are daytime, to keep illumination out of the comparison. The real-fog
 the clear ones, so the comparison is distributional, not paired. A drop is reference AP minus the other side's AP, and
 is undefined (None) when either AP is: a class with no objects on one side has nothing to compare.
 
+Precision-recall, for a Benchmark run: each class's PR curve on the same three sides, the Benchmark's own
+(ClassMetrics.pr_curve, the curve its AP is computed from), with its precision and recall at the display threshold.
+
 Where it fails, for a Benchmark run: AP per condition and class, day and night as separate conditions, with counts.
 
 Worst frames: a Benchmark run's highest error scores at the display threshold over every condition, or a video run's
@@ -20,14 +23,14 @@ Headlines are the user's own, one per numbered finding, stored beside the run (b
 here writes one.
 """
 
-from typing import Literal
+from typing import Literal, NamedTuple
 
 from pydantic import BaseModel
 
 from backend.benchmark import IOU_THRESHOLD, WEIGHTS, BenchmarkWeights, ClassMetrics, FrameScore
-from backend.benchmark_run import BenchmarkExperiment, ConditionResult, condition_result
+from backend.benchmark_run import BenchmarkExperiment, ConditionResult, SyntheticConditionResult, condition_result
 from backend.class_mapping import CLASS_MAPPING, ClassMapping
-from backend.conditions import CONDITIONS
+from backend.conditions import CONDITIONS, condition_name
 from backend.detection import ModelInfo
 from backend.experiment import AppliedDegradation, Experiment
 from backend.latency import LatencySummary
@@ -38,13 +41,14 @@ from backend.subset import LOW_N_OBJECTS, Manifest
 from backend.synthetic_frames import SyntheticFramesExperiment, benchmark_rows
 
 # The numbered findings, each led by a headline the user writes from the results. Nothing here ever writes one.
-FindingKey = Literal["sim-to-real", "where-it-fails", "reliability-timeline"]
-BENCHMARK_FINDINGS: tuple[FindingKey, ...] = ("sim-to-real", "where-it-fails")
+FindingKey = Literal["sim-to-real", "where-it-fails", "precision-recall", "reliability-timeline"]
+BENCHMARK_FINDINGS: tuple[FindingKey, ...] = ("sim-to-real", "where-it-fails", "precision-recall")
 VIDEO_FINDINGS: tuple[FindingKey, ...] = ("reliability-timeline",)
 HEADLINE_LENGTH = 500  # one sentence, generously
 
 REFERENCE = "clear-day"
 REAL_FOG = "fog-day"
+REAL_FOG_TITLE = "Real fog · day"
 WORST_FRAMES = 6  # in the gallery; every frame is in the Benchmark's Frame table
 
 # Said of every run, then each kind's own limits before them.
@@ -102,6 +106,21 @@ class SimToReal(BaseModel):
     synthetic: list[Comparison]  # one per synthetic fog run on the clear-day frames
 
 
+class CurveSide(BaseModel):
+    """One side's per-class PR curves, each with its precision and recall at the display threshold."""
+
+    title: str
+    condition: str
+    experiment_id: str | None  # the synthetic run's id; None for the run's own conditions
+    classes: list[ClassMetrics]  # in MAIN_CLASSES order
+
+
+class PRCurves(BaseModel):
+    reference: CurveSide | None  # None when the run has no clear-day frames, and then nothing is overlaid
+    real: CurveSide | None
+    synthetic: list[CurveSide]
+
+
 class HeatmapCell(BaseModel):
     class_name: str
     ap: float | None  # None: the condition has no objects of this class
@@ -152,6 +171,7 @@ class BenchmarkFindings(BaseModel):
     latency: LatencySummary | None
     limitations: list[str]
     sim_to_real: SimToReal
+    pr_curves: PRCurves
     conditions: list[HeatmapRow]  # every condition in the manifest, in vocabulary order: day and night apart
     worst_frames: list[WorstFrame]  # at the display threshold, worst first; frames with no errors are left out
 
@@ -167,6 +187,7 @@ def benchmark_findings(
         for condition in CONDITIONS
         if condition in experiment.frames
     ]
+    sides = fog_sides(experiment, {row.condition: row for row in scored}, runs, display_threshold)
     return BenchmarkFindings(
         id=experiment.id,
         headlines=_own(headlines, BENCHMARK_FINDINGS),
@@ -185,7 +206,8 @@ def benchmark_findings(
         ),
         latency=experiment.latency,
         limitations=BENCHMARK_LIMITATIONS,
-        sim_to_real=sim_to_real(experiment, {row.condition: row for row in scored}, runs, display_threshold),
+        sim_to_real=sim_to_real(sides),
+        pr_curves=pr_curves(sides),
         conditions=[HeatmapRow(**_side(row).model_dump(), cells=[_cell(c) for c in row.classes]) for row in scored],
         worst_frames=worst_frames(scored),
     )
@@ -277,25 +299,56 @@ def _cell(metrics: ClassMetrics) -> HeatmapCell:
     )
 
 
-def sim_to_real(
+class FogSides(NamedTuple):
+    """What both sim-to-real and precision-recall set side by side, already scored at the display threshold."""
+
+    reference: ConditionResult
+    real: ConditionResult | None  # None without fog-day frames
+    synthetic: list[SyntheticConditionResult]  # each synthetic fog run on the clear-day frames
+
+
+def fog_sides(
     experiment: BenchmarkExperiment,
     scored: dict[str, ConditionResult],
     runs: list[SyntheticFramesExperiment],
     display_threshold: float,
-) -> SimToReal:
-    """`scored` is the run's own conditions, already scored at the display threshold."""
+) -> FogSides | None:
+    """`scored` is the run's own conditions. None when the run has no clear-day frames: nothing to compare against."""
     reference = scored.get(REFERENCE)
     if reference is None or reference.frames == 0:
-        return SimToReal(reference=None, real=None, synthetic=[])
-    real = None
-    if REAL_FOG in scored and scored[REAL_FOG].frames:
-        real = _compare(reference, scored[REAL_FOG], "Real fog · day", None)
+        return None
+    real = scored.get(REAL_FOG)
     synthetic = [
-        _compare(reference, row, row.title, row.experiment_id)
+        row
         for row in benchmark_rows(experiment, runs, display_threshold)
         if row.degradation.kind == "fog" and row.condition == REFERENCE
     ]
-    return SimToReal(reference=_side(reference), real=real, synthetic=synthetic)
+    return FogSides(reference=reference, real=real if real and real.frames else None, synthetic=synthetic)
+
+
+def sim_to_real(sides: FogSides | None) -> SimToReal:
+    if sides is None:
+        return SimToReal(reference=None, real=None, synthetic=[])
+    reference = sides.reference
+    return SimToReal(
+        reference=_side(reference),
+        real=None if sides.real is None else _compare(reference, sides.real, REAL_FOG_TITLE, None),
+        synthetic=[_compare(reference, row, row.title, row.experiment_id) for row in sides.synthetic],
+    )
+
+
+def pr_curves(sides: FogSides | None) -> PRCurves:
+    if sides is None:
+        return PRCurves(reference=None, real=None, synthetic=[])
+    return PRCurves(
+        reference=_curves(sides.reference, condition_name(REFERENCE), None),
+        real=None if sides.real is None else _curves(sides.real, REAL_FOG_TITLE, None),
+        synthetic=[_curves(row, row.title, row.experiment_id) for row in sides.synthetic],
+    )
+
+
+def _curves(result: ConditionResult, title: str, experiment_id: str | None) -> CurveSide:
+    return CurveSide(title=title, condition=result.condition, experiment_id=experiment_id, classes=result.classes)
 
 
 def _side(result: ConditionResult) -> Side:
