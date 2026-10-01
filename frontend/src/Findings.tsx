@@ -6,6 +6,7 @@ import {
   type BenchmarkFindings,
   type Comparison,
   type FindingKey,
+  type CurveSide,
   type PRCurves,
   type Side,
   type FrameReliability,
@@ -225,18 +226,18 @@ function HeadlineEditor({ findingKey, label, saved }: { findingKey: FindingKey; 
  */
 function PrFinding({ curves, syntheticId, threshold }: { curves: PRCurves; syntheticId: string | null; threshold: number }) {
   const classes = curves.reference?.classes.map((c) => c.class_name) ?? [];
-  const [pick, setPick] = useState<string | null>(null);
+  const [pickedClass, setPickedClass] = useState<string | null>(null);
   if (curves.reference === null) {
     return <p className="field-note">This run has no Clear · day frames, so there is nothing to compare against.</p>;
   }
-  const className = pick ?? curves.reference.classes.find((c) => c.objects > 0)?.class_name ?? classes[0];
+  const className = pickedClass ?? curves.reference.classes.find((c) => c.objects > 0)?.class_name ?? classes[0];
   const synthetic = curves.synthetic.find((s) => s.experiment_id === syntheticId) ?? null;
-  const of = (side: PRCurves["reference"]) => side?.classes.find((c) => c.class_name === className);
+  const classOn = (side: CurveSide | null) => side?.classes.find((c) => c.class_name === className);
   return (
     <>
       <label className="findings-run">
         Class
-        <select value={className} onChange={(event) => setPick(event.target.value)}>
+        <select value={className} onChange={(event) => setPickedClass(event.target.value)}>
           {classes.map((name) => (
             <option key={name} value={name}>
               {name}
@@ -248,9 +249,19 @@ function PrFinding({ curves, syntheticId, threshold }: { curves: PRCurves; synth
         className={className}
         threshold={threshold}
         lines={[
-          { name: curves.reference.title, ...CURVE_STYLES.reference, metrics: of(curves.reference) },
-          { name: synthetic?.title ?? "Synthetic fog", ...CURVE_STYLES.synthetic, metrics: of(synthetic) },
-          { name: curves.real?.title ?? "Real fog · day", ...CURVE_STYLES.real, metrics: of(curves.real) },
+          { name: curves.reference.title, ...CURVE_STYLES.reference, metrics: classOn(curves.reference), absent: "" },
+          {
+            name: synthetic?.title ?? "Synthetic fog",
+            ...CURVE_STYLES.synthetic,
+            metrics: classOn(synthetic),
+            absent: "not run on the Clear · day frames yet",
+          },
+          {
+            name: curves.real?.title ?? "Real fog · day",
+            ...CURVE_STYLES.real,
+            metrics: classOn(curves.real),
+            absent: "no Fog · day frames in this run",
+          },
         ]}
       />
     </>

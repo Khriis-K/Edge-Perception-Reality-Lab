@@ -225,7 +225,8 @@ export type CurveLine = {
   name: string;
   color: string;
   dash: string | undefined; // each side has its own line style too, so it isn't told apart by color alone
-  metrics: ClassMetrics | undefined; // undefined: the side wasn't run
+  metrics: ClassMetrics | undefined;
+  absent: string; // why there are no metrics, when there are none
 };
 
 /** The sides' curve styles, in the order the chart and its labels list them. */
@@ -301,18 +302,19 @@ export function PrCurves({ className, lines, threshold }: { className: string; l
       </svg>
       <figcaption>
         <ul aria-label="Curves" className="chart-legend curve-labels">
-          {lines.map(({ name, color, dash, metrics }) => (
+          {lines.map(({ name, color, dash, metrics, absent }) => (
             <li key={name}>
               <svg width={24} height={10} aria-hidden>
                 <line x1={0} x2={24} y1={5} y2={5} stroke={color} strokeWidth={2} strokeDasharray={dash} />
               </svg>
-              {metrics ? curveSummary(name, metrics, threshold) : `${name}: not run`}
+              {metrics ? curveSummary(name, metrics, threshold) : `${name}: ${absent}`}
             </li>
           ))}
         </ul>
         <p className="chart-legend">
           A ring marks each curve&apos;s point at the display threshold, confidence ≥ {threshold.toFixed(2)}; a dot, its
-          lowest confidence.
+          lowest confidence. Curves are drawn as measured; AP takes the area under them with
+          precision interpolated, the best at any higher recall.
         </p>
       </figcaption>
     </figure>

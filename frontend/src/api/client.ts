@@ -47,6 +47,7 @@ export type Side = components["schemas"]["Side"];
 export type Comparison = components["schemas"]["Comparison"];
 export type ClassDrop = components["schemas"]["ClassDrop"];
 export type PRCurves = components["schemas"]["PRCurves"];
+export type CurveSide = components["schemas"]["CurveSide"];
 export type HeatmapRow = components["schemas"]["HeatmapRow"];
 export type HeatmapCell = components["schemas"]["HeatmapCell"];
 export type WorstFrame = components["schemas"]["WorstFrame"];

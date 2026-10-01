@@ -30,7 +30,7 @@ from pydantic import BaseModel
 from backend.benchmark import IOU_THRESHOLD, WEIGHTS, BenchmarkWeights, ClassMetrics, FrameScore
 from backend.benchmark_run import BenchmarkExperiment, ConditionResult, SyntheticConditionResult, condition_result
 from backend.class_mapping import CLASS_MAPPING, ClassMapping
-from backend.conditions import CONDITIONS
+from backend.conditions import CONDITIONS, condition_name
 from backend.detection import ModelInfo
 from backend.experiment import AppliedDegradation, Experiment
 from backend.latency import LatencySummary
@@ -48,7 +48,6 @@ HEADLINE_LENGTH = 500  # one sentence, generously
 
 REFERENCE = "clear-day"
 REAL_FOG = "fog-day"
-REFERENCE_TITLE = "Clear · day"
 REAL_FOG_TITLE = "Real fog · day"
 WORST_FRAMES = 6  # in the gallery; every frame is in the Benchmark's Frame table
 
@@ -342,7 +341,7 @@ def pr_curves(sides: FogSides | None) -> PRCurves:
     if sides is None:
         return PRCurves(reference=None, real=None, synthetic=[])
     return PRCurves(
-        reference=_curves(sides.reference, REFERENCE_TITLE, None),
+        reference=_curves(sides.reference, condition_name(REFERENCE), None),
         real=None if sides.real is None else _curves(sides.real, REAL_FOG_TITLE, None),
         synthetic=[_curves(row, row.title, row.experiment_id) for row in sides.synthetic],
     )

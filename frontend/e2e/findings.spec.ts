@@ -114,7 +114,7 @@ test("finding 03 overlays a class's PR curves, labels each in text, and switches
   const curves = pr.getByRole("list", { name: "Curves" }).getByRole("listitem");
   await expect(curves).toHaveText([
     "Clear · day: AP 1.00 over 1 object (low n); at ≥ 0.25, precision 1.00 and recall 1.00",
-    /^Synthetic fog/, // other specs may have run synthetic fog on this manifest already
+    /^Synthetic fog/, // another spec may already have run synthetic fog on this manifest
     "Real fog · day: no objects of this class, so no curve",
   ]);
 
