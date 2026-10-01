@@ -242,8 +242,13 @@ export function fetchExports(signal: AbortSignal): Promise<ExportSummary[]> {
 }
 
 /** Saves the chosen files of a run's report under exports/, as the preview shows them. */
-export function exportReport(experimentId: string, displayThreshold: number, files: ExportFileName[]): Promise<ExportSummary> {
-  const query = new URLSearchParams({ display_threshold: String(displayThreshold) });
+export function exportReport(
+  experimentId: string,
+  displayThreshold: number,
+  files: ExportFileName[],
+  datasetImagery: boolean,
+): Promise<ExportSummary> {
+  const query = new URLSearchParams({ display_threshold: String(displayThreshold), dataset_imagery: String(datasetImagery) });
   for (const name of files) query.append("include", name);
   return request(`/api/findings/${encodeURIComponent(experimentId)}/exports?${query}`, { method: "POST" });
 }
@@ -253,10 +258,12 @@ export async function fetchReportPreview(
   experimentId: string,
   name: ExportFileName,
   displayThreshold: number,
+  datasetImagery: boolean,
   signal: AbortSignal,
 ): Promise<string> {
   const id = encodeURIComponent(experimentId);
-  const response = await fetchOk(`/api/findings/${id}/report/${name}?display_threshold=${displayThreshold}`, { signal });
+  const query = new URLSearchParams({ display_threshold: String(displayThreshold), dataset_imagery: String(datasetImagery) });
+  const response = await fetchOk(`/api/findings/${id}/report/${name}?${query}`, { signal });
   return response.text();
 }
 

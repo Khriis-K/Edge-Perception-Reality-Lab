@@ -1,4 +1,4 @@
-import { Button, Checkbox, Tab, Tabs } from "@blueprintjs/core";
+import { Button, Callout, Checkbox, Switch, Tab, Tabs } from "@blueprintjs/core";
 import { useState, type ReactNode } from "react";
 import { exportFileUrl, type ExportFileName, type ExportSummary } from "./api/client";
 import { RunPicker } from "./Findings";
@@ -125,7 +125,7 @@ function SelectedExport({ summary }: { summary: ExportSummary }) {
 
 function ExportForm() {
   const { findings } = useFindings();
-  const { preview, chosen, choose, runExport } = useReport();
+  const { preview, chosen, choose, datasetImagery, setDatasetImagery, runExport } = useReport();
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -152,6 +152,23 @@ function ExportForm() {
           {preview && <span className="run-meta"> · {formatBytes(byteSize(preview[name]))}</span>}
         </Checkbox>
       ))}
+      {findings.kind === "benchmark" && (
+        <>
+          <h3 className="inspector-heading">Imagery</h3>
+          <Switch
+            label="Include dataset imagery"
+            checked={datasetImagery}
+            onChange={(e) => setDatasetImagery(e.currentTarget.checked)}
+          />
+          {datasetImagery ? (
+            <Callout intent="warning" role="note">
+              Check the dataset's terms of use before you share this report: it embeds SeeingThroughFog frames.
+            </Callout>
+          ) : (
+            <p className="field-note">Off: worst frames are named by id only.</p>
+          )}
+        </>
+      )}
       <h3 className="inspector-heading">Always included</h3>
       <ul aria-label="Always included" className="limitations">
         {alwaysIncluded(findings.kind).map((section) => (

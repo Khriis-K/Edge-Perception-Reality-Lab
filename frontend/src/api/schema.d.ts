@@ -377,7 +377,8 @@ export interface paths {
          * Export Report
          * @description Save a finished run's report under exports/: the files included of report.html, metrics.json and frames.csv
          *     (all three unless told), built from the same findings and results these endpoints return at this display threshold.
-         *     Nothing re-runs. A video run ignores the threshold, as its findings do.
+         *     Nothing re-runs. A video run ignores the threshold, as its findings do. A video run's worst frames are embedded;
+         *     a Benchmark run's only with dataset_imagery.
          */
         post: operations["export_report_api_findings__experiment_id__exports_post"];
         delete?: never;
@@ -2071,6 +2072,8 @@ export interface operations {
         parameters: {
             query: {
                 display_threshold: number;
+                /** @description Embed the worst frames of a Benchmark run's dataset (SeeingThroughFog) in report.html. Off by default: the dataset's terms of use decide whether its images may be shared. */
+                dataset_imagery?: boolean;
                 include?: ("report.html" | "metrics.json" | "frames.csv")[];
             };
             header?: never;
@@ -2143,6 +2146,8 @@ export interface operations {
         parameters: {
             query: {
                 display_threshold: number;
+                /** @description Embed the worst frames of a Benchmark run's dataset (SeeingThroughFog) in report.html. Off by default: the dataset's terms of use decide whether its images may be shared. */
+                dataset_imagery?: boolean;
             };
             header?: never;
             path: {

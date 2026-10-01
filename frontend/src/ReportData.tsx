@@ -24,6 +24,9 @@ interface ReportState {
   select: (exportId: string | null) => void;
   chosen: ExportFileName[];
   choose: (name: ExportFileName, on: boolean) => void;
+  /** Whether a Benchmark report embeds its worst dataset frames. Off until chosen, and reset for every run. */
+  datasetImagery: boolean;
+  setDatasetImagery: (on: boolean) => void;
   /** Saves the chosen files and selects the new export; rejects with the server's reason. */
   runExport: () => Promise<ExportSummary>;
 }
@@ -44,17 +47,21 @@ export function ReportProvider({ children }: { children: ReactNode }) {
   const [exportsError, setExportsError] = useState<string | null>(null);
   const [selectedId, select] = useState<string | null>(null);
   const [chosen, setChosen] = useState<ExportFileName[]>(EXPORT_FILES);
+  const [datasetImagery, setDatasetImagery] = useState(false);
+  const runId = findings?.id;
+
+  useEffect(() => setDatasetImagery(false), [runId]);
 
   useEffect(() => {
     setPreview(null);
     setPreviewError(null);
     if (!findings) return;
     const controller = new AbortController();
-    Promise.all(EXPORT_FILES.map((name) => fetchReportPreview(findings.id, name, threshold, controller.signal)))
+    Promise.all(EXPORT_FILES.map((name) => fetchReportPreview(findings.id, name, threshold, datasetImagery, controller.signal)))
       .then(([html, json, csv]) => setPreview({ "report.html": html, "metrics.json": json, "frames.csv": csv }))
       .catch((e) => !controller.signal.aborted && setPreviewError(`Could not build the preview: ${(e as Error).message}`));
     return () => controller.abort();
-  }, [findings, threshold]);
+  }, [findings, threshold, datasetImagery]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -70,7 +77,7 @@ export function ReportProvider({ children }: { children: ReactNode }) {
 
   async function runExport() {
     if (!findings) throw new Error("No run is open.");
-    const saved = await exportReport(findings.id, threshold, chosen);
+    const saved = await exportReport(findings.id, threshold, chosen, datasetImagery);
     setExports((current) => [saved, ...(current ?? [])]);
     select(saved.id);
     return saved;
@@ -78,7 +85,19 @@ export function ReportProvider({ children }: { children: ReactNode }) {
 
   return (
     <ReportContext.Provider
-      value={{ preview, previewError, exports, exportsError, selectedId, select, chosen, choose, runExport }}
+      value={{
+        preview,
+        previewError,
+        exports,
+        exportsError,
+        selectedId,
+        select,
+        chosen,
+        choose,
+        datasetImagery,
+        setDatasetImagery,
+        runExport,
+      }}
     >
       {children}
     </ReportContext.Provider>
