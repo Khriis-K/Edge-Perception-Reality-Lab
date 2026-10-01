@@ -3,7 +3,8 @@
 Starting a run returns a job at once. For a Synthetic run, a worker thread decodes the video, degrades each frame,
 runs the detector on both the clean and the degraded frame, and writes both to the cache so the
 browser can fetch them by id. Each stage is timed (see backend/latency.py). For a Benchmark run, it runs the detector
-once on every frame of the subset manifest and stores the detections with the frame's ground truth. A Synthetic run on
+once on every frame of the subset manifest and stores the detections with the frame's ground truth, timing the read
+and the detector as on video. A Synthetic run on
 dataset frames does both: it degrades each frame of one clear condition of the manifest, runs the detector on the clean
 and the degraded frame, and stores both with the ground truth. Only a run that finishes every frame becomes an
 experiment.
@@ -292,12 +293,24 @@ class JobManager:
             job.frames_total = len(work)
             job.status = "running"
             frames: dict[str, list[BenchmarkFrame]] = {c: [] for c in CONDITIONS if c in manifest.frames}
+            timings = []
             for condition, sample_id in work:
                 if job.cancel_requested.is_set():
                     break
+                started = time.perf_counter()
                 image, truths = read_frame(dataset_root, sample_id)
-                predictions = self.runner.detect(image, CONFIDENCE_FLOOR)
-                frames[condition].append(BenchmarkFrame(id=sample_id, predictions=predictions, truths=truths))
+                read = time.perf_counter()
+                run, run_s = self._detect(image)
+                frames[condition].append(BenchmarkFrame(id=sample_id, predictions=run.detections, truths=truths))
+                timings.append(
+                    FrameTiming(
+                        read_s=read - started,
+                        degrade_s=None,
+                        inference_s=[run.inference_s],
+                        processing_s=[run_s - run.inference_s],
+                        render_s=None,
+                    )
+                )
                 job.frames_done += 1
 
             if job.cancel_requested.is_set():
@@ -313,6 +326,7 @@ class JobManager:
                     confidence_floor=CONFIDENCE_FLOOR,
                     frames=frames,
                     warnings=run_warnings([f for listed in frames.values() for f in listed]),
+                    latency=summarize(timings),
                 ),
             )
             job.status = "completed"  # only after the experiment is stored, so pollers never see a gap

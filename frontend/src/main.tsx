@@ -9,6 +9,7 @@ import { BenchmarkFrameProvider } from "./BenchmarkFrame";
 import { BenchmarkResultsProvider } from "./BenchmarkResults";
 import { CurrentJobProvider } from "./CurrentJob";
 import { DegradationSettingsProvider } from "./DegradationSettings";
+import { FindingsProvider } from "./FindingsData";
 import { SubsetChoiceProvider } from "./SubsetChoice";
 import { SyntheticResultsProvider } from "./SyntheticResults";
 import { Workbench } from "./Workbench";
@@ -19,16 +20,18 @@ createRoot(document.getElementById("root")!).render(
       <SyntheticResultsProvider>
         <BenchmarkResultsProvider>
           <BenchmarkFrameProvider>
-            <SubsetChoiceProvider>
-              <DegradationSettingsProvider>
-                <BrowserRouter>
-                  <Routes>
-                    <Route path="/:section" element={<Workbench />} />
-                    <Route path="*" element={<Navigate to="/setup" replace />} />
-                  </Routes>
-                </BrowserRouter>
-              </DegradationSettingsProvider>
-            </SubsetChoiceProvider>
+            <FindingsProvider>
+              <SubsetChoiceProvider>
+                <DegradationSettingsProvider>
+                  <BrowserRouter>
+                    <Routes>
+                      <Route path="/:section" element={<Workbench />} />
+                      <Route path="*" element={<Navigate to="/setup" replace />} />
+                    </Routes>
+                  </BrowserRouter>
+                </DegradationSettingsProvider>
+              </SubsetChoiceProvider>
+            </FindingsProvider>
           </BenchmarkFrameProvider>
         </BenchmarkResultsProvider>
       </SyntheticResultsProvider>

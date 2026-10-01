@@ -27,7 +27,8 @@ async function runToCompletion(page: Page) {
 }
 
 test("runs detection on the sample video, showing progress, then scrubs frames with labelled boxes", async ({ page }) => {
-  await startRun(page);
+  // A seed of its own: other specs run the default settings on this server, and a cached run shows no progress.
+  await startRun(page, 902);
 
   // Progress: the pill names the mode and shows a percent part-way through.
   await expect(pill(page)).toContainText(/synthetic/i);

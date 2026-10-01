@@ -1,4 +1,4 @@
-import type { components } from "./schema";
+import type { components, operations } from "./schema";
 
 export type HealthResponse = components["schemas"]["HealthResponse"];
 export type SampleVideo = components["schemas"]["SampleVideo"];
@@ -34,6 +34,22 @@ export type IndexedMatch = components["schemas"]["IndexedMatch"];
 export type SyntheticConditionResult = components["schemas"]["SyntheticConditionResult"];
 export type SyntheticFramesResults = components["schemas"]["SyntheticFramesResults"];
 export type ClearCondition = SyntheticFramesResults["condition"];
+export type ClassMapping = components["schemas"]["ClassMapping"];
+export type FindingsRun = components["schemas"]["FindingsRun"];
+export type BenchmarkFindings = components["schemas"]["BenchmarkFindings"];
+export type VideoFindings = components["schemas"]["VideoFindings"];
+export type Findings = BenchmarkFindings | VideoFindings;
+// The numbered findings a headline can lead: the path parameter is the one place the schema names them.
+export type FindingKey = operations["put_headline_api_findings__experiment_id__headlines__key__put"]["parameters"]["path"]["key"];
+export type Headlines = Partial<Record<FindingKey, string>>;
+export type SimToReal = components["schemas"]["SimToReal"];
+export type Side = components["schemas"]["Side"];
+export type Comparison = components["schemas"]["Comparison"];
+export type ClassDrop = components["schemas"]["ClassDrop"];
+export type HeatmapRow = components["schemas"]["HeatmapRow"];
+export type HeatmapCell = components["schemas"]["HeatmapCell"];
+export type WorstFrame = components["schemas"]["WorstFrame"];
+export type FrameReliability = components["schemas"]["FrameReliability"];
 
 // Empty in production: the backend serves this page, so the API is same-origin.
 const API_BASE: string = import.meta.env.VITE_API_BASE ?? "";
@@ -189,4 +205,24 @@ export function fetchSyntheticFramesResults(
 
 export function frameImageUrl(experimentId: string, variant: FrameVariant, frameIndex: number): string {
   return `${API_BASE}/api/experiments/${encodeURIComponent(experimentId)}/frames/${variant}/${frameIndex}`;
+}
+
+/** The runs Findings can open, newest first: Benchmark runs and Synthetic runs on video. */
+export function fetchFindingsRuns(signal: AbortSignal): Promise<FindingsRun[]> {
+  return request("/api/findings", { signal });
+}
+
+/** A run's findings, as chart data. A Benchmark run's worst frames are scored at the display threshold. */
+export function fetchFindings(experimentId: string, displayThreshold: number, signal: AbortSignal): Promise<Findings> {
+  const id = encodeURIComponent(experimentId);
+  return request(`/api/findings/${id}?display_threshold=${displayThreshold}`, { signal });
+}
+
+/** Stores the headline the user wrote for one finding, with the run; blank text clears it. Returns them all. */
+export function saveHeadline(experimentId: string, key: FindingKey, text: string): Promise<Headlines> {
+  return request(`/api/findings/${encodeURIComponent(experimentId)}/headlines/${key}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
 }

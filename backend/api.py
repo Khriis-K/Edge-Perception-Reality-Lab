@@ -5,9 +5,10 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.benchmark_run import (
+    BenchmarkExperiment,
     BenchmarkResults,
     FrameDetail,
     ManifestRefused,
@@ -22,6 +23,16 @@ from backend.dataset import DatasetIndex, FrameNotFound, camera_image, check_rea
 from backend.degradations import KINDS, RANDOMIZED, TITLES, DegradationKind, parameters
 from backend.detection import ModelInfo
 from backend.experiment import AppliedDegradation, DegradationSettings, Experiment, FrameVariant
+from backend.findings import (
+    BENCHMARK_FINDINGS,
+    HEADLINE_LENGTH,
+    VIDEO_FINDINGS,
+    BenchmarkFindings,
+    FindingKey,
+    VideoFindings,
+    benchmark_findings,
+    video_findings,
+)
 from backend.jobs import Job, JobManager, JobMode, JobStatus, NoDetector
 from backend.samples import SAMPLES
 from backend.stability import StabilityReport, stability_report
@@ -40,6 +51,7 @@ from backend.synthetic_frames import (
     SyntheticFramesExperiment,
     SyntheticFramesResults,
     benchmark_rows,
+    degradation_title,
     synthetic_frames_results,
 )
 
@@ -158,6 +170,26 @@ class ExperimentSummary(BaseModel):
     model: ModelInfo
     frame_count: int
     saved_at: datetime
+
+
+class FindingsRun(BaseModel):
+    """A run Findings can open: a Benchmark run, or a Synthetic run on video. A Synthetic run on clear dataset frames
+    is part of its Benchmark run's findings, not a document of its own."""
+
+    id: str
+    kind: Literal["benchmark", "video"]
+    title: str
+    saved_at: datetime
+
+
+Findings = Annotated[BenchmarkFindings | VideoFindings, Field(discriminator="kind")]
+
+
+class HeadlineRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # Written by the user, from the results. Blank clears it.
+    text: str = Field(max_length=HEADLINE_LENGTH)
 
 
 class CacheInfo(BaseModel):
@@ -445,6 +477,68 @@ def get_synthetic_frames_results(
     if experiment is None:
         raise HTTPException(status_code=404, detail="No completed synthetic run on dataset frames with that id.")
     return synthetic_frames_results(experiment, display_threshold)
+
+
+@router.get("/findings")
+def list_findings_runs(jobs: Jobs) -> list[FindingsRun]:
+    """The runs Findings can open, newest first: Benchmark runs and Synthetic runs on video."""
+    runs = []
+    for entry in jobs.cache.entries((BenchmarkExperiment, Experiment)):
+        experiment = entry.experiment
+        if isinstance(experiment, BenchmarkExperiment):
+            manifest = experiment.manifest
+            kind, title = "benchmark", f"Benchmark: seed {manifest.seed}, up to {manifest.cap} frames per condition"
+        else:
+            kind, title = "video", f"{degradation_title(experiment.degradation)} on {_sample_title(experiment.sample_id)}"
+        runs.append(FindingsRun(id=experiment.id, kind=kind, title=title, saved_at=entry.saved_at))
+    return runs
+
+
+@router.get("/findings/{experiment_id}")
+def get_findings(
+    experiment_id: str,
+    jobs: Jobs,
+    display_threshold: Annotated[float, Query(ge=0, le=1, allow_inf_nan=False)],
+) -> Findings:
+    """A finished run's findings, as data for the Findings screen's charts, scored from the stored detections. A
+    Benchmark run's has sim-to-real, the condition-by-class heatmap and worst frames at the display threshold; a video
+    run's has the reliability timeline and worst frames, and ignores the threshold."""
+    run = _findings_run(jobs, experiment_id)
+    headlines = jobs.cache.headlines(experiment_id)
+    if isinstance(run, BenchmarkExperiment):
+        return benchmark_findings(run, jobs.cache.synthetic_frames_runs(), display_threshold, headlines)
+    return video_findings(run, _sample_title(run.sample_id), headlines)
+
+
+@router.put("/findings/{experiment_id}/headlines/{key}")
+def put_headline(experiment_id: str, key: FindingKey, body: HeadlineRequest, jobs: Jobs) -> dict[FindingKey, str]:
+    """Store the headline the user wrote for one finding of a run, with the run. Blank text clears it. Returns every
+    headline the run now has. A finding the run doesn't have (a timeline on a Benchmark run) is refused (422)."""
+    run = _findings_run(jobs, experiment_id)
+    keys = BENCHMARK_FINDINGS if isinstance(run, BenchmarkExperiment) else VIDEO_FINDINGS
+    if key not in keys:
+        raise HTTPException(status_code=422, detail=f"This run has no {key} finding.")
+    headlines = {k: v for k, v in jobs.cache.headlines(experiment_id).items() if k in keys}
+    text = body.text.strip()
+    if text:
+        headlines[key] = text
+    else:
+        headlines.pop(key, None)
+    jobs.cache.save_headlines(experiment_id, headlines)
+    return headlines
+
+
+def _findings_run(jobs: JobManager, experiment_id: str) -> BenchmarkExperiment | Experiment:
+    """The Benchmark or video run Findings can open under this id, or a 404."""
+    run = jobs.cache.load_benchmark(experiment_id) or jobs.experiment(experiment_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="No completed Benchmark or video run with that id.")
+    return run
+
+
+def _sample_title(sample_id: str) -> str:
+    sample = SAMPLES.get(sample_id)
+    return sample.title if sample else sample_id
 
 
 @router.get("/benchmark/experiments/{experiment_id}/frames/{frame_id}")

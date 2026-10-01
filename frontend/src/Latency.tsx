@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { LatencySummary, StageLatency } from "./api/client";
+import type { LatencySummary, ModelInfo, StageLatency } from "./api/client";
 import { formatMs, modelLine } from "./latencyFormat";
 import { Metric } from "./Stability";
 import { useSyntheticResults } from "./SyntheticResults";
@@ -10,12 +10,25 @@ export function LatencyInspector() {
   if (!results) return null;
 
   const { model, latency } = results.experiment;
+  return <LatencySection model={model} latency={latency ?? null} readNote="to decode a frame" />;
+}
+
+/** What ran the model and each stage's time; shared by Synthetic and Findings. `readNote` says what "Read" timed. */
+export function LatencySection({
+  model,
+  latency,
+  readNote,
+}: {
+  model: ModelInfo;
+  latency: LatencySummary | null;
+  readNote: string;
+}) {
   return (
     <section aria-label="Latency" className="latency-inspector">
       <h3 className="inspector-heading">Latency</h3>
       <p className="field-note">{modelLine(model)}</p>
       {latency ? (
-        <LatencyMetrics latency={latency} provider={model.provider ?? model.runtime} />
+        <LatencyMetrics latency={latency} provider={model.provider ?? model.runtime} readNote={readNote} />
       ) : (
         <p className="field-note">Not recorded: this run is too short to measure after the warm-up, or was cached before latency was measured.</p>
       )}
@@ -23,7 +36,7 @@ export function LatencyInspector() {
   );
 }
 
-function LatencyMetrics({ latency, provider }: { latency: LatencySummary; provider: string }) {
+function LatencyMetrics({ latency, provider, readNote }: { latency: LatencySummary; provider: string; readNote: string }) {
   const { inference, processing, read, degrade, render } = latency;
   const fps = latency.effective_fps;
   return (
@@ -41,12 +54,15 @@ function LatencyMetrics({ latency, provider }: { latency: LatencySummary; provid
         </Metric>
         <StageMetric name="Pre/post-processing" stage={processing} />
         <StageMetric name="Read" stage={read}>
-          to decode a frame
+          {readNote}
         </StageMetric>
-        <StageMetric name="Degrade" stage={degrade} />
-        <StageMetric name="Render" stage={render}>
-          to write both frames
-        </StageMetric>
+        {/* A Benchmark run degrades and renders nothing: those stages are left out, never shown as 0 ms. */}
+        {degrade && <StageMetric name="Degrade" stage={degrade} />}
+        {render && (
+          <StageMetric name="Render" stage={render}>
+            to write both frames
+          </StageMetric>
+        )}
       </dl>
       <p className="field-note">
         Over {latency.frames} frames; the first {latency.warmup_frames} were warm-up and are left out.

@@ -29,6 +29,7 @@ from backend.dataset import Frame, camera_image, read_labels
 from backend.detection import Box, Detection, ModelInfo
 from backend.experiment import AppliedDegradation
 from backend.labels import Box as LabelBox
+from backend.latency import LatencySummary
 from backend.subset import LOW_N_OBJECTS, Manifest
 
 SHOWN_IDS = 5  # frame ids named in a message before the rest are counted
@@ -46,6 +47,9 @@ class BenchmarkExperiment(BaseModel):
     confidence_floor: float
     frames: dict[str, list[BenchmarkFrame]]  # condition -> its frames, in manifest order
     warnings: list[str]
+    # Read and inference only (see backend/latency.py). None for a run no longer than the warm-up, and for runs
+    # cached before Benchmark latency was measured.
+    latency: LatencySummary | None = None
 
 
 class ConditionResult(BaseModel):
