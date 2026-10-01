@@ -11,11 +11,22 @@ import cv2
 import numpy as np
 from pydantic import BaseModel
 
-from backend.benchmark import IOU_THRESHOLD, BenchmarkFrame, ClassMetrics, GroundTruth, evaluate_condition
-from backend.class_mapping import dataset_class
+from backend.benchmark import (
+    IOU_THRESHOLD,
+    WEIGHTS,
+    BenchmarkFrame,
+    BenchmarkWeights,
+    ClassMetrics,
+    FrameLevel,
+    FrameScore,
+    GroundTruth,
+    evaluate_condition,
+    frame_levels,
+)
+from backend.class_mapping import TruthRole, dataset_class, map_detections, truth_role
 from backend.conditions import CONDITIONS, VOCABULARY_VERSION
 from backend.dataset import Frame, camera_image, read_labels
-from backend.detection import Box, ModelInfo
+from backend.detection import Box, Detection, ModelInfo
 from backend.experiment import AppliedDegradation
 from backend.labels import Box as LabelBox
 from backend.subset import LOW_N_OBJECTS, Manifest
@@ -44,6 +55,7 @@ class ConditionResult(BaseModel):
     low_n: bool  # some class in mAP has fewer than low_n_objects objects, or no class has any
     map: float | None
     classes: list[ClassMetrics]
+    frame_scores: list[FrameScore]  # in manifest order, at the display threshold
 
 
 class SyntheticConditionResult(ConditionResult):
@@ -67,6 +79,22 @@ class BenchmarkResults(BaseModel):
     # Cached synthetic runs on this manifest's clear frames, with the same model and scoring settings.
     synthetic: list[SyntheticConditionResult]
     warnings: list[str]
+
+
+class FrameTruth(GroundTruth):
+    role: TruthRole
+
+
+class FrameDetail(BaseModel):
+    """One frame, for the frame viewer: its overlays at every display threshold."""
+
+    id: str
+    condition: str
+    weights: BenchmarkWeights
+    predictions: list[Detection]  # mapped to dataset classes; the levels' prediction indexes point here
+    unmapped: list[Detection]  # detections of classes outside the class mapping: never scored
+    truths: list[FrameTruth]  # every label; the levels' truth indexes point here
+    levels: list[FrameLevel]
 
 
 def check_manifest(manifest: Manifest, frames: list[Frame]) -> None:
@@ -159,6 +187,31 @@ def condition_result(condition: str, frames: list[BenchmarkFrame], display_thres
         low_n=metrics.low_n,
         map=metrics.map,
         classes=metrics.classes,
+        frame_scores=[FrameScore(**f.model_dump(exclude={"matches"})) for f in metrics.frame_results],
+    )
+
+
+def find_frame(experiment: BenchmarkExperiment, frame_id: str) -> tuple[str, BenchmarkFrame] | None:
+    """The frame with this id and its condition, or None."""
+    for condition, frames in experiment.frames.items():
+        for frame in frames:
+            if frame.id == frame_id:
+                return condition, frame
+    return None
+
+
+def frame_detail(condition: str, frame: BenchmarkFrame) -> FrameDetail:
+    """The frame for the frame viewer: mapped predictions, unmapped ones apart, every label with its role, and the
+    matches at every display threshold."""
+    predictions = map_detections(frame.predictions)
+    return FrameDetail(
+        id=frame.id,
+        condition=condition,
+        weights=WEIGHTS,
+        predictions=predictions,
+        unmapped=[p for p in frame.predictions if dataset_class(p.label) is None],
+        truths=[FrameTruth(label=t.label, box=t.box, role=truth_role(t.label)) for t in frame.truths],
+        levels=frame_levels(frame.id, predictions, frame.truths),
     )
 
 

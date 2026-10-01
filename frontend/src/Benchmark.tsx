@@ -1,18 +1,23 @@
 import { Button } from "@blueprintjs/core";
-import { useId, useState, type ChangeEvent } from "react";
+import { useState, type ChangeEvent, type ReactNode } from "react";
 import type { ClassMetrics, ConditionResult, Job, Manifest, SyntheticConditionResult } from "./api/client";
+import { useBenchmarkFrame } from "./BenchmarkFrame";
 import { useBenchmarkResults } from "./BenchmarkResults";
-import { conditionName, formatMetric, parseThreshold } from "./benchmarkFormat";
+import { BenchmarkViewer } from "./BenchmarkViewer";
+import { conditionName, formatMetric } from "./benchmarkFormat";
 import { isActive, useCurrentJob } from "./CurrentJob";
 import { useSubsetChoice } from "./SubsetChoice";
 import { useSubset } from "./SubsetTable";
+import { scoreParts } from "./frameReview";
+import { ThresholdField } from "./ThresholdField";
 import { useDatasetStatus } from "./useDatasetStatus";
 
 /**
  * Benchmark screen: run the detector over the subset chosen in Setup (or a saved manifest file), then read each
- * condition's per-class AP, and precision and recall at the display threshold.
+ * condition's per-class AP, and precision and recall at the display threshold, and review its frames.
+ * `onOpenInspector` runs when a box in the frame viewer is clicked, to open the inspector drawer.
  */
-export function BenchmarkRun() {
+export function BenchmarkRun({ onOpenInspector }: { onOpenInspector: () => void }) {
   const { status } = useDatasetStatus();
   const ready = status?.ready ?? false;
   const [choice] = useSubsetChoice();
@@ -77,7 +82,7 @@ export function BenchmarkRun() {
             {message}
           </p>
         ))}
-      {results && <BenchmarkBody />}
+      {results && <BenchmarkBody onOpenInspector={onOpenInspector} />}
     </div>
   );
 }
@@ -96,7 +101,7 @@ function BenchmarkStatus({ job }: { job: Job | null }) {
   return <p className="run-status">{text}</p>;
 }
 
-function BenchmarkBody() {
+function BenchmarkBody({ onOpenInspector }: { onOpenInspector: () => void }) {
   const { results, threshold, setThreshold, selected } = useBenchmarkResults();
   if (!results) return null;
 
@@ -109,7 +114,12 @@ function BenchmarkBody() {
           ))}
         </ul>
       )}
-      <ThresholdField threshold={threshold} onChange={setThreshold} />
+      {/* A synthetic row's degraded images aren't kept, so it has no frames to view: just the threshold. */}
+      {selected && "experiment_id" in selected ? (
+        <ThresholdField threshold={threshold} onChange={setThreshold} />
+      ) : (
+        <BenchmarkViewer onOpenInspector={onOpenInspector} />
+      )}
       {selected && (
         <ClassTable
           title={"experiment_id" in selected ? syntheticName(selected) : conditionName(selected.condition)}
@@ -119,32 +129,6 @@ function BenchmarkBody() {
         />
       )}
     </>
-  );
-}
-
-/** The confidence precision and recall are counted at. Changing it re-scores stored detections; nothing re-runs. */
-export function ThresholdField({ threshold, onChange }: { threshold: number; onChange: (value: number) => void }) {
-  // The typed text, kept apart from the value so a half-typed number like "0." stays in the box.
-  const [text, setText] = useState(String(threshold));
-  const id = useId();
-  return (
-    <div className="field threshold-field">
-      <label htmlFor={id}>Display threshold</label>
-      <input
-        id={id}
-        className="bp6-input"
-        type="number"
-        min={0}
-        max={1}
-        step={0.05}
-        value={text}
-        onChange={(e) => {
-          setText(e.target.value);
-          const value = parseThreshold(e.target.value);
-          if (value !== null) onChange(value);
-        }}
-      />
-    </div>
   );
 }
 
@@ -197,12 +181,16 @@ export function ClassTable({ title, condition, threshold, lowN }: ClassTableProp
   );
 }
 
+const SHOWN_FRAMES = 10; // per expanded condition; the rest are in the dock's Frame table
+
 /**
  * Benchmark's explorer: every condition in the run's manifest with its mAP, then the synthetic degradations run on
- * its clear frames, then the manifest and model.
+ * its clear frames, then the manifest and model. Clicking a real condition selects and expands it to its frames,
+ * worst first; clicking it again collapses it.
  */
 export function BenchmarkExplorer({ empty }: { empty: string }) {
   const { results, selected, select } = useBenchmarkResults();
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   // A load error is shown in the work area; results already loaded stay listed beside it.
   if (!results) return <p className="empty-state">{empty}</p>;
@@ -217,8 +205,14 @@ export function BenchmarkExplorer({ empty }: { empty: string }) {
             row={row}
             name={conditionName(row.condition)}
             current={row.condition === selectedKey}
-            onSelect={() => select(row.condition)}
-          />
+            expanded={row.condition === expanded}
+            onSelect={() => {
+              select(row.condition);
+              setExpanded(row.condition === expanded ? null : row.condition);
+            }}
+          >
+            {row.condition === expanded && row.condition === selectedKey && <FrameList />}
+          </ConditionItem>
         ))}
       </ul>
       {results.synthetic.length > 0 && (
@@ -240,6 +234,7 @@ export function BenchmarkExplorer({ empty }: { empty: string }) {
         </>
       )}
       <footer className="cache-info">
+        <span>Frames ranked by error score at confidence ≥ {results.display_threshold.toFixed(2)}</span>
         <span>
           Manifest: seed {manifest.seed}, up to {manifest.cap} per condition, vocabulary v{manifest.vocabulary_version}
         </span>
@@ -256,13 +251,22 @@ type ConditionItemProps = {
   name: string;
   detail?: string;
   current: boolean;
+  /** Set on rows that expand to their frames; synthetic rows have none. */
+  expanded?: boolean;
   onSelect: () => void;
+  children?: ReactNode;
 };
 
-function ConditionItem({ row, name, detail, current, onSelect }: ConditionItemProps) {
+function ConditionItem({ row, name, detail, current, expanded, onSelect, children }: ConditionItemProps) {
   return (
     <li>
-      <button type="button" className="run-item" aria-current={current ? "true" : undefined} onClick={onSelect}>
+      <button
+        type="button"
+        className="run-item"
+        aria-current={current ? "true" : undefined}
+        aria-expanded={expanded}
+        onClick={onSelect}
+      >
         <span>{name}</span>
         <span className="run-meta">
           {detail && `${detail} · `}
@@ -275,6 +279,36 @@ function ConditionItem({ row, name, detail, current, onSelect }: ConditionItemPr
           )}
         </span>
       </button>
+      {children}
     </li>
+  );
+}
+
+/** The selected condition's worst frames, each with its score and what it is made of. */
+function FrameList() {
+  const { ranked, frameId, openFrame } = useBenchmarkFrame();
+  if (ranked.length === 0) return <p className="frame-list-note">No frames.</p>;
+  const more = ranked.length - SHOWN_FRAMES;
+  return (
+    <>
+      <ul aria-label="Frames, worst first" className="frame-list">
+        {ranked.slice(0, SHOWN_FRAMES).map((frame) => (
+          <li key={frame.id}>
+            <button
+              type="button"
+              className="run-item frame-item"
+              aria-current={frame.id === frameId ? "true" : undefined}
+              onClick={() => openFrame(frame.id)}
+            >
+              <span>{frame.id}</span>
+              <span className="run-meta">
+                score {frame.score} · {scoreParts(frame)}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {more > 0 && <p className="frame-list-note">+ {more} more in the Frame table</p>}
+    </>
   );
 }

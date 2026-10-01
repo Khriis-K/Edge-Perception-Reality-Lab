@@ -5,6 +5,7 @@ import "./styles.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router";
+import { BenchmarkFrameProvider } from "./BenchmarkFrame";
 import { BenchmarkResultsProvider } from "./BenchmarkResults";
 import { CurrentJobProvider } from "./CurrentJob";
 import { DegradationSettingsProvider } from "./DegradationSettings";
@@ -17,16 +18,18 @@ createRoot(document.getElementById("root")!).render(
     <CurrentJobProvider>
       <SyntheticResultsProvider>
         <BenchmarkResultsProvider>
-          <SubsetChoiceProvider>
-            <DegradationSettingsProvider>
-              <BrowserRouter>
-                <Routes>
-                  <Route path="/:section" element={<Workbench />} />
-                  <Route path="*" element={<Navigate to="/setup" replace />} />
-                </Routes>
-              </BrowserRouter>
-            </DegradationSettingsProvider>
-          </SubsetChoiceProvider>
+          <BenchmarkFrameProvider>
+            <SubsetChoiceProvider>
+              <DegradationSettingsProvider>
+                <BrowserRouter>
+                  <Routes>
+                    <Route path="/:section" element={<Workbench />} />
+                    <Route path="*" element={<Navigate to="/setup" replace />} />
+                  </Routes>
+                </BrowserRouter>
+              </DegradationSettingsProvider>
+            </SubsetChoiceProvider>
+          </BenchmarkFrameProvider>
         </BenchmarkResultsProvider>
       </SyntheticResultsProvider>
     </CurrentJobProvider>

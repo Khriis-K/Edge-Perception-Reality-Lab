@@ -1,8 +1,9 @@
 import type { SyntheticFramesResults } from "./api/client";
-import { ClassTable, ThresholdField } from "./Benchmark";
+import { ClassTable } from "./Benchmark";
 import { conditionName } from "./benchmarkFormat";
 import { StabilityMetrics } from "./Stability";
 import { useSyntheticResults } from "./SyntheticResults";
+import { ThresholdField } from "./ThresholdField";
 
 /**
  * A Synthetic run on the subset's clear frames. The frames are labelled, so it has both metric sets: stability against

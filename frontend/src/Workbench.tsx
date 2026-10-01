@@ -2,6 +2,8 @@ import { Button, Drawer, Tab, Tabs } from "@blueprintjs/core";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Navigate, useParams } from "react-router";
 import { BenchmarkExplorer, BenchmarkRun } from "./Benchmark";
+import { BenchmarkInspector } from "./BenchmarkInspector";
+import { FrameTable } from "./FrameTable";
 import { DatasetSetup } from "./DatasetSetup";
 import { DegradationInspector } from "./DegradationSettings";
 import { Rail } from "./Rail";
@@ -34,8 +36,10 @@ export function Workbench() {
       <TopBar section={section} onOpenInspector={wide ? undefined : () => setInspectorOpen(true)} />
       <Rail />
       <Explorer section={section} />
-      <WorkArea section={section} />
+      {/* Selecting a box opens the drawer below 1280 px; at desktop width the panel is always there. */}
+      <WorkArea section={section} onOpenInspector={() => setInspectorOpen(true)} />
       {section.id === "synthetic" && <Dock />}
+      {section.id === "benchmark" && <BenchmarkDock />}
       {wide ? (
         <InspectorPanel>{inspector}</InspectorPanel>
       ) : (
@@ -64,13 +68,13 @@ function Explorer({ section }: { section: Section }) {
   );
 }
 
-function WorkArea({ section }: { section: Section }) {
+function WorkArea({ section, onOpenInspector }: { section: Section; onOpenInspector: () => void }) {
   return (
     <main className="work-area">
       {/* Keyed by section so each section starts on its own tab set. */}
       {/* animate={false}: Blueprint's sliding indicator forces a transparent tab background. */}
       <Tabs id="work-tabs" key={section.id} className="tab-strip" animate={false}>
-        <Tab id="overview" title={section.id} panel={<Overview section={section} />} />
+        <Tab id="overview" title={section.id} panel={<Overview section={section} onOpenInspector={onOpenInspector} />} />
       </Tabs>
     </main>
   );
@@ -88,7 +92,26 @@ function Dock() {
   );
 }
 
-function Overview({ section }: { section: Section }) {
+/** Benchmark's dock. The Job tab (#13) will sit beside the Frame table. */
+function BenchmarkDock() {
+  return (
+    <section aria-label="Dock" className="dock">
+      <Tabs id="benchmark-dock" className="tab-strip dock-tabs" animate={false}>
+        <Tab
+          id="frames"
+          title="Frame table"
+          panel={
+            <div className="dock-body">
+              <FrameTable />
+            </div>
+          }
+        />
+      </Tabs>
+    </section>
+  );
+}
+
+function Overview({ section, onOpenInspector }: { section: Section; onOpenInspector: () => void }) {
   return (
     <div className="work-body">
       <h1>{section.label}</h1>
@@ -97,7 +120,7 @@ function Overview({ section }: { section: Section }) {
       ) : section.id === "setup" ? (
         <DatasetSetup />
       ) : section.id === "benchmark" ? (
-        <BenchmarkRun />
+        <BenchmarkRun onOpenInspector={onOpenInspector} />
       ) : (
         <p className="empty-state">Nothing here yet.</p>
       )}
@@ -115,6 +138,7 @@ function InspectorContent({ section }: { section: Section }) {
         <LatencyInspector />
       </>
     );
+  if (section.id === "benchmark") return <BenchmarkInspector />;
   return <p className="empty-state">Select something to see its details.</p>;
 }
 

@@ -26,6 +26,11 @@ export type Manifest = components["schemas"]["Manifest"];
 export type BenchmarkResults = components["schemas"]["BenchmarkResults"];
 export type ConditionResult = components["schemas"]["ConditionResult"];
 export type ClassMetrics = components["schemas"]["ClassMetrics"];
+export type FrameScore = components["schemas"]["FrameScore"];
+export type FrameDetail = components["schemas"]["FrameDetail"];
+export type FrameLevel = components["schemas"]["FrameLevel"];
+export type FrameTruth = components["schemas"]["FrameTruth"];
+export type IndexedMatch = components["schemas"]["IndexedMatch"];
 export type SyntheticConditionResult = components["schemas"]["SyntheticConditionResult"];
 export type SyntheticFramesResults = components["schemas"]["SyntheticFramesResults"];
 export type ClearCondition = SyntheticFramesResults["condition"];
@@ -145,6 +150,17 @@ export function fetchBenchmarkResults(
 ): Promise<BenchmarkResults> {
   const id = encodeURIComponent(experimentId);
   return request(`/api/benchmark/experiments/${id}?display_threshold=${displayThreshold}`, { signal });
+}
+
+/** One frame's predictions and labels, matched at every display threshold: the viewer never asks again. */
+export function fetchBenchmarkFrame(experimentId: string, frameId: string, signal: AbortSignal): Promise<FrameDetail> {
+  const id = encodeURIComponent(experimentId);
+  return request(`/api/benchmark/experiments/${id}/frames/${encodeURIComponent(frameId)}`, { signal });
+}
+
+/** A dataset frame's camera image. Shown locally only; it never goes into a report by default. */
+export function datasetFrameUrl(frameId: string): string {
+  return `${API_BASE}/api/dataset/frames/${encodeURIComponent(frameId)}`;
 }
 
 /** Degrades the manifest's frames of one clear condition and runs the detector on both variants, or returns a

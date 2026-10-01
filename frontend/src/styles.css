@@ -962,3 +962,124 @@ p {
 .class-table td:nth-child(6) {
   text-align: right;
 }
+
+/* --- benchmark frame viewer ---------------------------------------------------- */
+
+.benchmark-viewer .viewer-toolbar {
+  flex-wrap: wrap;
+}
+
+.benchmark-viewer .threshold-field {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.benchmark-viewer .viewer-toolbar .overlay-switch {
+  margin: 0;
+}
+
+/* One frame, not two panes: keep it at a readable size. */
+.benchmark-viewer .frame {
+  max-width: 960px;
+}
+
+/* Blue is a hit, orange an error, grey ignored; the text tag always says which. */
+.overlay-item {
+  --tone: var(--clean);
+  cursor: pointer;
+}
+
+.overlay-item.error {
+  --tone: var(--warn);
+}
+
+.overlay-item.neutral {
+  --tone: var(--muted);
+}
+
+.overlay-item rect {
+  fill: transparent;
+  stroke: var(--tone);
+  stroke-width: 2px;
+}
+
+.overlay-item text {
+  fill: var(--tone);
+  font-family: var(--mono);
+  font-size: 12px;
+  paint-order: stroke;
+  stroke: var(--chrome);
+  stroke-width: 3px;
+}
+
+/* Labels are dashed and ignore regions dotted: a second cue besides hue. */
+.overlay-item.labels rect {
+  stroke-dasharray: 6 3;
+}
+
+.overlay-item.regions rect {
+  stroke-dasharray: 2 3;
+}
+
+.overlay-item.selected rect,
+.overlay-item:focus-visible rect {
+  stroke-width: 4px;
+}
+
+.overlay-item:focus {
+  outline: none;
+}
+
+.frame-list {
+  margin: 0 0 4px;
+  padding: 0 0 0 12px;
+  list-style: none;
+}
+
+.explorer .frame-item {
+  padding: 4px 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.frame-list-note {
+  margin: 0 0 6px 24px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.benchmark-inspector dl {
+  margin: 4px 0 0;
+}
+
+.benchmark-inspector .metric-value {
+  font-weight: 400;
+}
+
+.dock-tabs {
+  padding: 0 12px;
+}
+
+.sort-button,
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.link-button {
+  font-family: var(--mono);
+  text-decoration: underline;
+}
+
+.frame-table tr[aria-current] {
+  background: var(--raised);
+}
+
+.frame-table td {
+  text-align: right;
+}

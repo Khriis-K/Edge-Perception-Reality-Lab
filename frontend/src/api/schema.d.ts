@@ -43,6 +43,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/benchmark/experiments/{experiment_id}/frames/{frame_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Benchmark Frame
+         * @description One frame's predictions and labels, matched at every display threshold, so the frame viewer can change
+         *     threshold or toggle overlays without asking again. Its image is /api/dataset/frames/{frame_id}.
+         */
+        get: operations["get_benchmark_frame_api_benchmark_experiments__experiment_id__frames__frame_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/benchmark/jobs": {
         parameters: {
             query?: never;
@@ -457,6 +478,15 @@ export interface components {
             /** Warnings */
             warnings: string[];
         };
+        /** BenchmarkWeights */
+        BenchmarkWeights: {
+            /** Class Confusions */
+            class_confusions: number;
+            /** False Alarms */
+            false_alarms: number;
+            /** Misses */
+            misses: number;
+        };
         /**
          * Box
          * @description Corners in 0-1 image coordinates: (x1, y1) top-left, (x2, y2) bottom-right.
@@ -520,6 +550,8 @@ export interface components {
             classes: components["schemas"]["ClassMetrics"][];
             /** Condition */
             condition: string;
+            /** Frame Scores */
+            frame_scores: components["schemas"]["FrameScore"][];
             /** Frames */
             frames: number;
             /** Low N */
@@ -678,6 +710,33 @@ export interface components {
              */
             saved_at: string;
         };
+        /**
+         * FrameDetail
+         * @description One frame, for the frame viewer: its overlays at every display threshold.
+         */
+        FrameDetail: {
+            /** Condition */
+            condition: string;
+            /** Id */
+            id: string;
+            /** Levels */
+            levels: components["schemas"]["FrameLevel"][];
+            /** Predictions */
+            predictions: components["schemas"]["Detection"][];
+            /** Truths */
+            truths: components["schemas"]["FrameTruth"][];
+            /** Unmapped */
+            unmapped: components["schemas"]["Detection"][];
+            weights: components["schemas"]["BenchmarkWeights"];
+        };
+        /** FrameLevel */
+        FrameLevel: {
+            /** Matches */
+            matches: components["schemas"]["IndexedMatch"][];
+            /** Min Confidence */
+            min_confidence: number | null;
+            score: components["schemas"]["FrameScore"];
+        };
         /** FrameResult */
         FrameResult: {
             /** Clean */
@@ -686,6 +745,23 @@ export interface components {
             degraded: components["schemas"]["Detection"][];
             /** Index */
             index: number;
+        };
+        /** FrameScore */
+        FrameScore: {
+            /** Class Confusions */
+            class_confusions: number;
+            /** False Alarms */
+            false_alarms: number;
+            /** Hits */
+            hits: number;
+            /** Id */
+            id: string;
+            /** Ignored */
+            ignored: number;
+            /** Misses */
+            misses: number;
+            /** Score */
+            score: number;
         };
         /** FrameStability */
         FrameStability: {
@@ -706,6 +782,17 @@ export interface components {
             /** Score */
             score: number;
         };
+        /** FrameTruth */
+        FrameTruth: {
+            box: components["schemas"]["Box"];
+            /** Label */
+            label: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "object" | "ignore" | "excluded";
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -718,6 +805,23 @@ export interface components {
              * @constant
              */
             status: "ok";
+        };
+        /**
+         * IndexedMatch
+         * @description A match by position: `prediction` indexes the predictions matched, `truth` the frame's truths.
+         */
+        IndexedMatch: {
+            /** Iou */
+            iou?: number | null;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "hit" | "miss" | "false_alarm" | "class_confusion" | "ignored";
+            /** Prediction */
+            prediction: number | null;
+            /** Truth */
+            truth: number | null;
         };
         /** JobResponse */
         JobResponse: {
@@ -921,6 +1025,8 @@ export interface components {
             degradation: components["schemas"]["AppliedDegradation"];
             /** Experiment Id */
             experiment_id: string;
+            /** Frame Scores */
+            frame_scores: components["schemas"]["FrameScore"][];
             /** Frames */
             frames: number;
             /** Low N */
@@ -1022,6 +1128,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BenchmarkResults"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_benchmark_frame_api_benchmark_experiments__experiment_id__frames__frame_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                experiment_id: string;
+                frame_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FrameDetail"];
                 };
             };
             /** @description Validation Error */
