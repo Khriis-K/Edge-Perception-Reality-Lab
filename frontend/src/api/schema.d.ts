@@ -282,6 +282,69 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/findings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Findings Runs
+         * @description The runs Findings can open, newest first: Benchmark runs and Synthetic runs on video.
+         */
+        get: operations["list_findings_runs_api_findings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/findings/{experiment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Findings
+         * @description A finished run's findings, as data for the Findings screen's charts, scored from the stored detections. A
+         *     Benchmark run's has sim-to-real, the condition-by-class heatmap and worst frames at the display threshold; a video
+         *     run's has the reliability timeline and worst frames, and ignores the threshold.
+         */
+        get: operations["get_findings_api_findings__experiment_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/findings/{experiment_id}/headlines/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Headline
+         * @description Store the headline the user wrote for one finding of a run, with the run. Blank text clears it. Returns every
+         *     headline the run now has. A finding the run doesn't have (a timeline on a Benchmark run) is refused (422).
+         */
+        put: operations["put_headline_api_findings__experiment_id__headlines__key__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -455,6 +518,53 @@ export interface components {
             /** Severity */
             severity: number;
         };
+        /** BenchmarkFindings */
+        BenchmarkFindings: {
+            /** Conditions */
+            conditions: components["schemas"]["HeatmapRow"][];
+            /** Display Threshold */
+            display_threshold: number;
+            /** Headlines */
+            headlines: {
+                [key: string]: string;
+            };
+            /** Id */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "benchmark";
+            latency: components["schemas"]["LatencySummary"] | null;
+            /** Limitations */
+            limitations: string[];
+            record: components["schemas"]["BenchmarkRecord"];
+            sim_to_real: components["schemas"]["SimToReal"];
+            /** Worst Frames */
+            worst_frames: components["schemas"]["WorstFrame"][];
+        };
+        /**
+         * BenchmarkRecord
+         * @description What the run was: enough to reproduce it, and to read its numbers right.
+         */
+        BenchmarkRecord: {
+            class_mapping: components["schemas"]["ClassMapping"];
+            /** Class Mapping Version */
+            class_mapping_version: number;
+            /** Confidence Floor */
+            confidence_floor: number;
+            /** Frames */
+            frames: number;
+            /** Low N Objects */
+            low_n_objects: number;
+            manifest: components["schemas"]["Manifest"];
+            /** Match Iou */
+            match_iou: number;
+            model: components["schemas"]["ModelInfo"];
+            /** Objects */
+            objects: number;
+            weights: components["schemas"]["BenchmarkWeights"];
+        };
         /** BenchmarkResults */
         BenchmarkResults: {
             /** Class Mapping Version */
@@ -508,6 +618,23 @@ export interface components {
             /** Size Bytes */
             size_bytes: number;
         };
+        /** ClassDrop */
+        ClassDrop: {
+            /** Ap */
+            ap: number | null;
+            /** Class Name */
+            class_name: string;
+            /** Drop */
+            drop: number | null;
+            /** Low N */
+            low_n: boolean;
+            /** Objects */
+            objects: number;
+            /** Reference Ap */
+            reference_ap: number | null;
+            /** Reference Objects */
+            reference_objects: number;
+        };
         /** ClassMapping */
         ClassMapping: {
             /** Ignore Labels */
@@ -543,6 +670,30 @@ export interface components {
             predictions: number;
             /** Recall */
             recall: number | null;
+        };
+        /**
+         * Comparison
+         * @description One degraded side against the reference.
+         */
+        Comparison: {
+            /** Classes */
+            classes: components["schemas"]["ClassDrop"][];
+            /** Condition */
+            condition: string;
+            /** Experiment Id */
+            experiment_id: string | null;
+            /** Frames */
+            frames: number;
+            /** Low N */
+            low_n: boolean;
+            /** Map */
+            map: number | null;
+            /** Map Drop */
+            map_drop: number | null;
+            /** Objects */
+            objects: number;
+            /** Title */
+            title: string;
         };
         /** ConditionResult */
         ConditionResult: {
@@ -711,6 +862,27 @@ export interface components {
             saved_at: string;
         };
         /**
+         * FindingsRun
+         * @description A run Findings can open: a Benchmark run, or a Synthetic run on video. A Synthetic run on clear dataset frames
+         *     is part of its Benchmark run's findings, not a document of its own.
+         */
+        FindingsRun: {
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "benchmark" | "video";
+            /**
+             * Saved At
+             * Format: date-time
+             */
+            saved_at: string;
+            /** Title */
+            title: string;
+        };
+        /**
          * FrameDetail
          * @description One frame, for the frame viewer: its overlays at every display threshold.
          */
@@ -736,6 +908,26 @@ export interface components {
             /** Min Confidence */
             min_confidence: number | null;
             score: components["schemas"]["FrameScore"];
+        };
+        /**
+         * FrameReliability
+         * @description One video frame's stability against its clean frame: the reliability timeline's point.
+         */
+        FrameReliability: {
+            /** Class Changes */
+            class_changes: number;
+            /** Confidence Loss */
+            confidence_loss: number;
+            /** Dropped */
+            dropped: number;
+            /** Index */
+            index: number;
+            /** Introduced */
+            introduced: number;
+            /** Retained */
+            retained: number;
+            /** Score */
+            score: number;
         };
         /** FrameResult */
         FrameResult: {
@@ -798,6 +990,11 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** HeadlineRequest */
+        HeadlineRequest: {
+            /** Text */
+            text: string;
+        };
         /** HealthResponse */
         HealthResponse: {
             /**
@@ -805,6 +1002,34 @@ export interface components {
              * @constant
              */
             status: "ok";
+        };
+        /** HeatmapCell */
+        HeatmapCell: {
+            /** Ap */
+            ap: number | null;
+            /** Class Name */
+            class_name: string;
+            /** Frames */
+            frames: number;
+            /** Low N */
+            low_n: boolean;
+            /** Objects */
+            objects: number;
+        };
+        /** HeatmapRow */
+        HeatmapRow: {
+            /** Cells */
+            cells: components["schemas"]["HeatmapCell"][];
+            /** Condition */
+            condition: string;
+            /** Frames */
+            frames: number;
+            /** Low N */
+            low_n: boolean;
+            /** Map */
+            map: number | null;
+            /** Objects */
+            objects: number;
         };
         /**
          * IndexedMatch
@@ -852,7 +1077,7 @@ export interface components {
         };
         /** LatencySummary */
         LatencySummary: {
-            degrade: components["schemas"]["StageLatency"];
+            degrade: components["schemas"]["StageLatency"] | null;
             /** Effective Fps */
             effective_fps: number | null;
             /** Frames */
@@ -862,7 +1087,7 @@ export interface components {
             inference_runs: number;
             processing: components["schemas"]["StageLatency"];
             read: components["schemas"]["StageLatency"];
-            render: components["schemas"]["StageLatency"];
+            render: components["schemas"]["StageLatency"] | null;
             /** Warmup Frames */
             warmup_frames: number;
         };
@@ -949,6 +1174,29 @@ export interface components {
             dropped: number;
             /** Introduced */
             introduced: number;
+        };
+        /**
+         * Side
+         * @description A condition's mAP with the counts behind it.
+         */
+        Side: {
+            /** Condition */
+            condition: string;
+            /** Frames */
+            frames: number;
+            /** Low N */
+            low_n: boolean;
+            /** Map */
+            map: number | null;
+            /** Objects */
+            objects: number;
+        };
+        /** SimToReal */
+        SimToReal: {
+            real: components["schemas"]["Comparison"] | null;
+            reference: components["schemas"]["Side"] | null;
+            /** Synthetic */
+            synthetic: components["schemas"]["Comparison"][];
         };
         /** StabilityReport */
         StabilityReport: {
@@ -1078,6 +1326,74 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /**
+         * VideoFindings
+         * @description A video run has no labels, so no sim-to-real or heatmap. It is a continuous clip, so it has a timeline.
+         */
+        VideoFindings: {
+            /** Headlines */
+            headlines: {
+                [key: string]: string;
+            };
+            /** Id */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "video";
+            latency: components["schemas"]["LatencySummary"] | null;
+            /** Limitations */
+            limitations: string[];
+            record: components["schemas"]["VideoRecord"];
+            /** Timeline */
+            timeline: components["schemas"]["FrameReliability"][];
+            /** Worst Frames */
+            worst_frames: components["schemas"]["FrameReliability"][];
+        };
+        /** VideoRecord */
+        VideoRecord: {
+            /** Confidence Floor */
+            confidence_floor: number;
+            degradation: components["schemas"]["AppliedDegradation"];
+            /** Frame Height */
+            frame_height: number;
+            /** Frame Width */
+            frame_width: number;
+            /** Frames */
+            frames: number;
+            /** Low N Objects */
+            low_n_objects: number;
+            /** Match Iou */
+            match_iou: number;
+            model: components["schemas"]["ModelInfo"];
+            /** Sample Id */
+            sample_id: string;
+            /** Sample Title */
+            sample_title: string;
+            /** Stability Threshold */
+            stability_threshold: number;
+            weights: components["schemas"]["ScoreWeights"];
+        };
+        /** WorstFrame */
+        WorstFrame: {
+            /** Class Confusions */
+            class_confusions: number;
+            /** Condition */
+            condition: string;
+            /** False Alarms */
+            false_alarms: number;
+            /** Hits */
+            hits: number;
+            /** Id */
+            id: string;
+            /** Ignored */
+            ignored: number;
+            /** Misses */
+            misses: number;
+            /** Score */
+            score: number;
         };
     };
     responses: never;
@@ -1494,6 +1810,97 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StabilityReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_findings_runs_api_findings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingsRun"][];
+                };
+            };
+        };
+    };
+    get_findings_api_findings__experiment_id__get: {
+        parameters: {
+            query: {
+                display_threshold: number;
+            };
+            header?: never;
+            path: {
+                experiment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BenchmarkFindings"] | components["schemas"]["VideoFindings"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_headline_api_findings__experiment_id__headlines__key__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                experiment_id: string;
+                key: "sim-to-real" | "where-it-fails" | "reliability-timeline";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HeadlineRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
                 };
             };
             /** @description Validation Error */

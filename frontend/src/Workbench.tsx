@@ -6,6 +6,8 @@ import { BenchmarkInspector } from "./BenchmarkInspector";
 import { FrameTable } from "./FrameTable";
 import { DatasetSetup } from "./DatasetSetup";
 import { DegradationInspector } from "./DegradationSettings";
+import { FindingsDocument, FindingsExplorer } from "./Findings";
+import { FindingsInspector } from "./FindingsInspector";
 import { Rail } from "./Rail";
 import { SetupExplorer, SyntheticExplorer } from "./RunHistory";
 import { LatencyInspector } from "./Latency";
@@ -61,6 +63,8 @@ function Explorer({ section }: { section: Section }) {
         <SyntheticExplorer empty={section.explorerEmpty} />
       ) : section.id === "benchmark" ? (
         <BenchmarkExplorer empty={section.explorerEmpty} />
+      ) : section.id === "findings" ? (
+        <FindingsExplorer empty={section.explorerEmpty} />
       ) : (
         <p className="empty-state">{section.explorerEmpty}</p>
       )}
@@ -121,6 +125,8 @@ function Overview({ section, onOpenInspector }: { section: Section; onOpenInspec
         <DatasetSetup />
       ) : section.id === "benchmark" ? (
         <BenchmarkRun onOpenInspector={onOpenInspector} />
+      ) : section.id === "findings" ? (
+        <FindingsDocument />
       ) : (
         <p className="empty-state">Nothing here yet.</p>
       )}
@@ -139,6 +145,7 @@ function InspectorContent({ section }: { section: Section }) {
       </>
     );
   if (section.id === "benchmark") return <BenchmarkInspector />;
+  if (section.id === "findings") return <FindingsInspector />;
   return <p className="empty-state">Select something to see its details.</p>;
 }
 

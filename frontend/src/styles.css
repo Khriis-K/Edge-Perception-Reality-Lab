@@ -1091,3 +1091,201 @@ p {
 .frame-table td {
   text-align: right;
 }
+
+/* --- findings: a document of numbered findings, each led by the user's headline ------------------------ */
+
+.findings {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 900px;
+}
+
+.findings-run {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.finding {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+}
+
+.finding-number {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.headline-editor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.headline-input {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.headline-input::placeholder {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.findings-caveat {
+  padding: 6px 10px;
+  border-left: 2px solid var(--warn);
+  background: var(--panel);
+}
+
+.headline-numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 0;
+}
+
+.headline-numbers dt {
+  color: var(--muted);
+}
+
+.headline-numbers dd {
+  margin: 0;
+}
+
+.chart {
+  margin: 0;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  vertical-align: middle;
+}
+
+.heatmap {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.heatmap caption {
+  caption-side: bottom;
+  padding-top: 6px;
+  text-align: left;
+  color: var(--muted);
+}
+
+.heatmap th,
+.heatmap td {
+  padding: 6px 10px;
+  border: 1px solid var(--black);
+  text-align: left;
+}
+
+.heatmap thead th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.heatmap td {
+  min-width: 72px;
+  font-family: var(--mono);
+}
+
+.heatmap-value {
+  display: block;
+  font-weight: 600;
+}
+
+.heatmap-counts {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.heatmap th .heatmap-counts {
+  color: var(--muted);
+}
+
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gallery-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px;
+  background: var(--panel);
+  font-size: 12px;
+}
+
+.gallery-card img {
+  width: 100%;
+  margin-bottom: 4px;
+  background: var(--black);
+}
+
+.gallery-title {
+  font-family: var(--mono);
+  font-weight: 600;
+}
+
+.findings-inspector section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.limitations {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12px;
+}
+
+.limitations li + li {
+  margin-top: 4px;
+}
+
+.explorer li.run-item {
+  cursor: default;
+}
+
+.explorer li.run-item:hover {
+  background: none;
+}
+
+.record-value {
+  font-size: 12px;
+}

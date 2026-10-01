@@ -7,7 +7,8 @@ ever deletes its own staging folder, never another job's results.
 
 Layout: a Synthetic run is <cache>/<id>/experiment.json and <cache>/<id>/frames/<variant>/<index>.jpg; a Benchmark
 run is <cache>/<id>/benchmark.json alone (its images stay in the dataset), and so is a Synthetic run on dataset frames
-<cache>/<id>/synthetic_frames.json alone (its degraded images are not kept). Jobs in progress are under
+<cache>/<id>/synthetic_frames.json alone (its degraded images are not kept). Any entry may also hold headlines.json,
+the Findings headlines the user wrote for it. Jobs in progress are under
 <cache>/.staging/<job id>/.
 Cached artifacts are for local use only. Deleting the folder, or any entry in it, is always safe.
 """
@@ -41,6 +42,8 @@ RECORD_FILES = {
     SyntheticFramesExperiment: "synthetic_frames.json",
 }
 Record = Experiment | BenchmarkExperiment | SyntheticFramesExperiment
+# The user's Findings headlines for a run, beside its record. Not part of the record, so not part of the id.
+HEADLINES_FILE = "headlines.json"
 # The Synthetic runs, on video and on dataset frames: the run history lists both.
 SyntheticRecord = Experiment | SyntheticFramesExperiment
 
@@ -120,8 +123,8 @@ def fingerprint(path: Path) -> str:
 
 
 @dataclass(frozen=True)
-class CacheEntry:
-    experiment: SyntheticRecord
+class CacheEntry[T: Record = SyntheticRecord]:
+    experiment: T
     saved_at: datetime
 
 
@@ -172,14 +175,15 @@ class ExperimentCache:
     def frame_file(self, experiment_id: str, variant: FrameVariant, index: int) -> Path:
         return self.frame_in(self.root / experiment_id, variant, index)
 
-    def entries(self) -> list[CacheEntry]:
-        """Every complete Synthetic run, on video or on dataset frames, newest first."""
+    def entries(self, kinds: tuple[type[Record], ...] = (Experiment, SyntheticFramesExperiment)) -> list[CacheEntry]:
+        """Every complete run of these kinds, newest first: by default the Synthetic runs, on video or on dataset
+        frames."""
         if not self.root.is_dir():
             return []
         entries = [
             CacheEntry(experiment=loaded[1], saved_at=datetime.fromtimestamp(loaded[0] / 1e9, UTC))
             for folder in self.root.iterdir()
-            for kind in (Experiment, SyntheticFramesExperiment)
+            for kind in kinds
             if (loaded := self._read(folder.name, kind))
         ]
         return sorted(entries, key=lambda entry: entry.saved_at, reverse=True)
@@ -189,6 +193,26 @@ class ExperimentCache:
         if not self.root.is_dir():
             return []
         return [loaded[1] for folder in self.root.iterdir() if (loaded := self._read(folder.name, SyntheticFramesExperiment))]
+
+    def headlines(self, experiment_id: str) -> dict[str, str]:
+        """The headlines the user wrote for a run's findings, by finding. Empty when none are written."""
+        try:
+            return json.loads(self._headlines_file(experiment_id).read_text(encoding="utf-8"))
+        except (OSError, ValueError):  # none written yet, or the file was damaged by hand
+            return {}
+
+    def save_headlines(self, experiment_id: str, headlines: dict[str, str]) -> None:
+        """Kept beside the run's record, never in it: the record is what the id was derived from. Written whole and
+        then moved into place, so a crash never leaves half a file. The caller checks the run exists."""
+        path = self._headlines_file(experiment_id)
+        staged = path.with_suffix(".json.tmp")
+        staged.write_text(json.dumps(headlines, ensure_ascii=False), encoding="utf-8")
+        os.replace(staged, path)
+
+    def _headlines_file(self, experiment_id: str) -> Path:
+        if not EXPERIMENT_ID.fullmatch(experiment_id):
+            raise ValueError(f"Not an experiment id: {experiment_id!r}")
+        return self.root / experiment_id / HEADLINES_FILE
 
     def size_bytes(self) -> int:
         total = 0

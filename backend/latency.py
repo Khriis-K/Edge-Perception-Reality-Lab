@@ -7,6 +7,8 @@ Measurement method. Every frame of a run is timed with time.perf_counter, stage 
   runner, which has no session, times its whole detect call);
 - processing: the rest of each detector call, letterboxing before inference and decoding plus NMS after it;
 - render: encoding both frames as JPEGs into the cache.
+A Benchmark run reads a dataset image instead of decoding video, and runs the detector once per frame. It degrades and
+renders nothing, so it has no degrade or render stage (None, never 0 ms).
 The first WARMUP_FRAMES frames are left out of every stage and counted: a fresh session allocates memory and
 picks kernels on its first calls, which would inflate the tail. Each stage reports its p50 and p90 (numpy's linear
 interpolation) in milliseconds; inference pools the clean and degraded calls.
@@ -32,10 +34,10 @@ class FrameTiming:
     """One frame's stage times, in seconds. Inference and processing have one entry per detector call."""
 
     read_s: float
-    degrade_s: float
+    degrade_s: float | None  # None for a run with no such stage
     inference_s: list[float]
     processing_s: list[float]
-    render_s: float
+    render_s: float | None
 
 
 class StageLatency(BaseModel):
@@ -50,8 +52,8 @@ class LatencySummary(BaseModel):
     inference: StageLatency
     processing: StageLatency  # pre- and post-processing around inference
     read: StageLatency
-    degrade: StageLatency
-    render: StageLatency
+    degrade: StageLatency | None  # None: the run degrades nothing (a Benchmark run)
+    render: StageLatency | None  # None: the run renders nothing (a Benchmark run)
     effective_fps: float | None  # None if the measured stages took no time at all
 
 
@@ -76,7 +78,13 @@ def summarize(timings: list[FrameTiming], warmup_frames: int = WARMUP_FRAMES) ->
         inference=inference,
         processing=processing,
         read=read,
-        degrade=stage_latency([t.degrade_s for t in measured]),
-        render=stage_latency([t.render_s for t in measured]),
+        degrade=_optional_stage([t.degrade_s for t in measured]),
+        render=_optional_stage([t.render_s for t in measured]),
         effective_fps=1000 / frame_ms if frame_ms > 0 else None,
     )
+
+
+def _optional_stage(seconds: list[float | None]) -> StageLatency | None:
+    """A stage some runs don't have: None when no frame timed it."""
+    timed = [s for s in seconds if s is not None]
+    return stage_latency(timed) if timed else None
