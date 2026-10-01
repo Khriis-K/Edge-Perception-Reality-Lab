@@ -23,6 +23,9 @@ export function FrameTable() {
     direction: "descending",
   });
   if (!results || !condition) return <p className="empty-state">Run a benchmark to list its frames.</p>;
+  if ("experiment_id" in condition) {
+    return <p className="empty-state">Synthetic rows keep no degraded images, so they have no frames to list.</p>;
+  }
 
   const rows = sortFrames(ranked, sort.column, sort.direction);
   const toggle = (column: FrameColumn) =>

@@ -5,6 +5,8 @@ import {
   JobNotFound,
   startBenchmark as requestBenchmark,
   startRun,
+  startSyntheticFrames as requestSyntheticFrames,
+  type ClearCondition,
   type DegradationSettings,
   type Job,
   type Manifest,
@@ -23,6 +25,7 @@ interface CurrentJob {
   error: string | null;
   start: (sampleId: string, degradation: DegradationSettings) => Promise<void>;
   startBenchmark: (manifest: Manifest) => Promise<void>;
+  startSyntheticFrames: (manifest: Manifest, condition: ClearCondition, degradation: DegradationSettings) => Promise<void>;
   cancel: () => Promise<void>;
 }
 
@@ -66,7 +69,7 @@ export function CurrentJobProvider({ children }: { children: ReactNode }) {
     };
   }, [activeId]);
 
-  // Synthetic and Benchmark runs are tracked, polled and cancelled the same way.
+  // Every kind of run is tracked, polled and cancelled the same way.
   const track = useCallback(async (begin: () => Promise<Job>) => {
     setError(null);
     try {
@@ -80,6 +83,11 @@ export function CurrentJobProvider({ children }: { children: ReactNode }) {
     [track],
   );
   const startBenchmark = useCallback((manifest: Manifest) => track(() => requestBenchmark(manifest)), [track]);
+  const startSyntheticFrames = useCallback(
+    (manifest: Manifest, condition: ClearCondition, degradation: DegradationSettings) =>
+      track(() => requestSyntheticFrames(manifest, condition, degradation)),
+    [track],
+  );
 
   const cancel = useCallback(async () => {
     if (!activeId) return;
@@ -91,7 +99,7 @@ export function CurrentJobProvider({ children }: { children: ReactNode }) {
   }, [activeId]);
 
   return (
-    <CurrentJobContext.Provider value={{ job, error, start, startBenchmark, cancel }}>
+    <CurrentJobContext.Provider value={{ job, error, start, startBenchmark, startSyntheticFrames, cancel }}>
       {children}
     </CurrentJobContext.Provider>
   );

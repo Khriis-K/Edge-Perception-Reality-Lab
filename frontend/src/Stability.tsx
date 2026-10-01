@@ -82,35 +82,38 @@ export function StabilityInspector() {
 }
 
 function ClipMetrics({ stability }: { stability: StabilityReport }) {
-  const { retention, introduced, class_changes, median_confidence_shift: shift } = stability;
   return (
     <>
-      <dl className="metrics" aria-label="Clip stability">
-        <Metric name="Retention rate" value={percent(retention.rate)} lowN={retention.low_n}>
-          {retention.count} / {retention.total} clean detections kept their label
-        </Metric>
-        <Metric name="Introduced rate" value={percent(introduced.rate)} lowN={introduced.low_n}>
-          {introduced.count} / {introduced.total} degraded detections are new
-        </Metric>
-        <Metric name="Class changes" value={String(class_changes.count)} lowN={class_changes.low_n}>
-          of {class_changes.total} clean detections
-        </Metric>
-        <Metric
-          name="Median confidence shift"
-          value={shift.value === null ? "—" : signed(shift.value)}
-          lowN={shift.low_n}
-        >
-          over {shift.pairs} retained pairs
-        </Metric>
-        <Metric name="Frames evaluated" value={String(stability.frames_evaluated)}>
-          counting detections at confidence ≥ {stability.confidence_threshold.toFixed(2)} only
-        </Metric>
-      </dl>
+      <StabilityMetrics stability={stability} label="Clip stability" />
       <p className="field-note">
         <span className="low-n">low n</span>: counted over fewer than {stability.low_n_objects} detections (or retained
         pairs), too few to trust. Counts are detections across frames; consecutive frames of the same object are not independent evidence.
       </p>
     </>
+  );
+}
+
+/** Retention, introduced, class changes and confidence shift, each with the counts behind it. */
+export function StabilityMetrics({ stability, label }: { stability: StabilityReport; label: string }) {
+  const { retention, introduced, class_changes, median_confidence_shift: shift } = stability;
+  return (
+    <dl className="metrics" aria-label={label}>
+      <Metric name="Retention rate" value={percent(retention.rate)} lowN={retention.low_n}>
+        {retention.count} / {retention.total} clean detections kept their label
+      </Metric>
+      <Metric name="Introduced rate" value={percent(introduced.rate)} lowN={introduced.low_n}>
+        {introduced.count} / {introduced.total} degraded detections are new
+      </Metric>
+      <Metric name="Class changes" value={String(class_changes.count)} lowN={class_changes.low_n}>
+        of {class_changes.total} clean detections
+      </Metric>
+      <Metric name="Median confidence shift" value={shift.value === null ? "—" : signed(shift.value)} lowN={shift.low_n}>
+        over {shift.pairs} retained pairs
+      </Metric>
+      <Metric name="Frames evaluated" value={String(stability.frames_evaluated)}>
+        counting detections at confidence ≥ {stability.confidence_threshold.toFixed(2)} only
+      </Metric>
+    </dl>
   );
 }
 

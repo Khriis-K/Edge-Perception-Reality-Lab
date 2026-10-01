@@ -30,7 +30,9 @@ export function BenchmarkFrameProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [selectedKey, selectOverlay] = useState<string | null>(null);
 
-  const ranked = rankFrames(selected?.frame_scores ?? []);
+  // A synthetic row's degraded images aren't kept, so it has no frames to open.
+  const real = selected && !("experiment_id" in selected) ? selected : null;
+  const ranked = rankFrames(real?.frame_scores ?? []);
   const frameId = ranked.some((f) => f.id === picked) ? picked : (ranked[0]?.id ?? null);
   const experimentId = results?.id ?? null;
 

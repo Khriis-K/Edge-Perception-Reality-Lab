@@ -83,14 +83,16 @@ function FrameCounts({ score, threshold }: { score: FrameScore; threshold: numbe
 function ClassComparison() {
   const { results, selected: condition } = useBenchmarkResults();
   if (!results || !condition) return null;
-  const clearName = clearCounterpart(condition.condition);
+  // A synthetic row degrades a clear condition's frames, so it compares against that condition.
+  const synthetic = "experiment_id" in condition;
+  const clearName = synthetic ? condition.condition : clearCounterpart(condition.condition);
   const clear = results.conditions.find((c) => c.condition === clearName);
-  const isClear = clearName === condition.condition;
+  const isClear = !synthetic && clearName === condition.condition;
   const clearAp = (className: string) => clear?.classes.find((c) => c.class_name === className)?.ap ?? null;
   return (
     <div>
       <h3 className="inspector-heading">
-        Per-class AP: {conditionName(condition.condition)}
+        Per-class AP: {synthetic ? condition.title : conditionName(condition.condition)}
         {!isClear && ` vs. ${conditionName(clearName)}`}
       </h3>
       <dl className="metrics" aria-label="Per-class AP">

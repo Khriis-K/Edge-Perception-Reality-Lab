@@ -17,6 +17,7 @@ from backend.benchmark_run import (
     frame_detail,
 )
 from backend.class_mapping import CLASS_MAPPING, ClassMapping
+from backend.conditions import condition_name
 from backend.dataset import DatasetIndex, FrameNotFound, camera_image, check_readiness, index_dataset
 from backend.degradations import KINDS, RANDOMIZED, TITLES, DegradationKind, parameters
 from backend.detection import ModelInfo
@@ -33,6 +34,13 @@ from backend.subset import (
     Manifest,
     draw_subset,
     summarize,
+)
+from backend.synthetic_frames import (
+    ClearCondition,
+    SyntheticFramesExperiment,
+    SyntheticFramesResults,
+    benchmark_rows,
+    synthetic_frames_results,
 )
 
 router = APIRouter(prefix="/api")
@@ -88,6 +96,15 @@ class StartBenchmarkRequest(BaseModel):
     manifest: Manifest
 
 
+class StartSyntheticFramesRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # The subset manifest, as for a Benchmark run; only the frames it lists under `condition` are degraded.
+    manifest: Manifest
+    condition: ClearCondition
+    degradation: DegradationSettings
+
+
 class JobResponse(BaseModel):
     id: str
     experiment_id: str
@@ -130,10 +147,12 @@ class RunPreview(BaseModel):
 
 
 class ExperimentSummary(BaseModel):
-    """A cached run, for the run history. The frames themselves come from the experiment."""
+    """A cached Synthetic run, for the run history. The frames themselves come from the experiment."""
 
     id: str
-    sample_id: str
+    # What the run degraded: a sample video, or the subset's frames of one clear condition.
+    input: Literal["video", "dataset"]
+    sample_id: str  # the video's id, or the condition for dataset frames
     sample_title: str
     degradation: AppliedDegradation
     model: ModelInfo
@@ -236,16 +255,21 @@ def cancel_job(job_id: str, jobs: Jobs) -> JobResponse:
 
 @router.get("/experiments")
 def list_experiments(jobs: Jobs) -> list[ExperimentSummary]:
-    """Every cached run, newest first, read from the cache folder."""
+    """Every cached Synthetic run, on video or on dataset frames, newest first, read from the cache folder."""
     summaries = []
     for entry in jobs.cache.entries():
         experiment = entry.experiment
-        sample = SAMPLES.get(experiment.sample_id)
+        if isinstance(experiment, SyntheticFramesExperiment):
+            source, source_id, title = "dataset", experiment.condition, f"{condition_name(experiment.condition)} frames"
+        else:
+            sample = SAMPLES.get(experiment.sample_id)
+            source, source_id, title = "video", experiment.sample_id, sample.title if sample else experiment.sample_id
         summaries.append(
             ExperimentSummary(
                 id=experiment.id,
-                sample_id=experiment.sample_id,
-                sample_title=sample.title if sample else experiment.sample_id,
+                input=source,
+                sample_id=source_id,
+                sample_title=title,
                 degradation=experiment.degradation,
                 model=experiment.model,
                 frame_count=len(experiment.frames),
@@ -375,7 +399,52 @@ def get_benchmark_results(
     experiment = jobs.cache.load_benchmark(experiment_id)
     if experiment is None:
         raise HTTPException(status_code=404, detail="No completed benchmark with that id.")
-    return benchmark_results(experiment, display_threshold)
+    rows = benchmark_rows(experiment, jobs.cache.synthetic_frames_runs(), display_threshold)
+    return benchmark_results(experiment, display_threshold, rows)
+
+
+@router.post(
+    "/synthetic-frames/jobs",
+    status_code=202,
+    responses={
+        200: {"description": "Cached: the results were reused"},
+        409: {"description": "The dataset is not configured or not ready"},
+    },
+)
+def start_synthetic_frames(
+    body: StartSyntheticFramesRequest, request: Request, jobs: Jobs, response: Response
+) -> JobResponse:
+    """Degrade the manifest's frames of one clear condition and run the detector on both variants, or reuse the
+    cached results. The manifest is checked as for a Benchmark run, and must list frames under the condition."""
+    if jobs.runner is None:
+        raise HTTPException(status_code=503, detail=NO_MODEL_MESSAGE)
+    try:
+        check_manifest(body.manifest, _dataset_index(request).frames)
+    except ManifestRefused as refused:
+        raise HTTPException(status_code=422, detail=str(refused)) from refused
+    if not body.manifest.frames.get(body.condition):
+        raise HTTPException(
+            status_code=422,
+            detail=f"The manifest lists no {condition_name(body.condition)} frames to degrade. Draw a subset that has some.",
+        )
+    job = jobs.start_synthetic_frames(request.app.state.dataset_root, body.manifest, body.condition, body.degradation)
+    if job.cached:
+        response.status_code = 200
+    return JobResponse.of(job)
+
+
+@router.get("/synthetic-frames/experiments/{experiment_id}")
+def get_synthetic_frames_results(
+    experiment_id: str,
+    jobs: Jobs,
+    display_threshold: Annotated[float, Query(ge=0, le=1, allow_inf_nan=False)],
+) -> SyntheticFramesResults:
+    """Stability against the clean detections, and per-class AP, precision and recall for both the clean and the
+    degraded frames against the ground truth, with the Benchmark's definitions. Scored from the stored detections."""
+    experiment = jobs.cache.load_synthetic_frames(experiment_id)
+    if experiment is None:
+        raise HTTPException(status_code=404, detail="No completed synthetic run on dataset frames with that id.")
+    return synthetic_frames_results(experiment, display_threshold)
 
 
 @router.get("/benchmark/experiments/{experiment_id}/frames/{frame_id}")

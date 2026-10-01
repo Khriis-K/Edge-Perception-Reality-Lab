@@ -1,12 +1,12 @@
 import { Switch } from "@blueprintjs/core";
-import { useId, useState, type KeyboardEvent } from "react";
+import { useState, type KeyboardEvent } from "react";
 import { datasetFrameUrl, type FrameDetail } from "./api/client";
 import { useBenchmarkFrame } from "./BenchmarkFrame";
 import { useBenchmarkResults } from "./BenchmarkResults";
-import { conditionName, parseThreshold } from "./benchmarkFormat";
+import { conditionName } from "./benchmarkFormat";
 import { levelAt, overlayItems, unmappedAt, type Layer, type OverlayItem } from "./frameReview";
 import { toOverlayRect } from "./overlay";
-
+import { ThresholdField } from "./ThresholdField";
 
 const LAYERS: [layer: Layer, name: string][] = [
   ["labels", "Labels"],
@@ -20,7 +20,7 @@ const LAYERS: [layer: Layer, name: string][] = [
  * `onOpenInspector` runs when a box is clicked, so the narrow layout can open its inspector drawer.
  */
 export function BenchmarkViewer({ onOpenInspector }: { onOpenInspector: () => void }) {
-  const { threshold } = useBenchmarkResults();
+  const { threshold, setThreshold } = useBenchmarkResults();
   const { frame, frameId, error, selectedKey, selectOverlay } = useBenchmarkFrame();
   const [shown, setShown] = useState<Record<Layer, boolean>>({ labels: true, predictions: true, regions: true });
 
@@ -32,7 +32,7 @@ export function BenchmarkViewer({ onOpenInspector }: { onOpenInspector: () => vo
   return (
     <section aria-label="Frame viewer" className="frame-viewer benchmark-viewer">
       <div role="toolbar" aria-label="Overlay controls" className="viewer-toolbar">
-        <ThresholdInput />
+        <ThresholdField threshold={threshold} onChange={setThreshold} />
         {LAYERS.map(([layer, name]) => (
           <Switch
             key={layer}
@@ -59,31 +59,6 @@ export function BenchmarkViewer({ onOpenInspector }: { onOpenInspector: () => vo
         />
       )}
     </section>
-  );
-}
-
-function ThresholdInput() {
-  const { threshold, setThreshold } = useBenchmarkResults();
-  const [text, setText] = useState(String(threshold));
-  const id = useId();
-  return (
-    <span className="threshold-field">
-      <label htmlFor={id}>Display threshold</label>
-      <input
-        id={id}
-        className="bp6-input"
-        type="number"
-        min={0}
-        max={1}
-        step={0.05}
-        value={text}
-        onChange={(e) => {
-          setText(e.target.value);
-          const value = parseThreshold(e.target.value);
-          if (value !== null) setThreshold(value);
-        }}
-      />
-    </span>
   );
 }
 

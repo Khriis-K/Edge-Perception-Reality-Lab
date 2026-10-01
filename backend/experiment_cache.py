@@ -6,7 +6,8 @@ folder into place. So a cancelled, failed or crashed run never leaves a complete
 ever deletes its own staging folder, never another job's results.
 
 Layout: a Synthetic run is <cache>/<id>/experiment.json and <cache>/<id>/frames/<variant>/<index>.jpg; a Benchmark
-run is <cache>/<id>/benchmark.json alone (its images stay in the dataset). Jobs in progress are under
+run is <cache>/<id>/benchmark.json alone (its images stay in the dataset), and so is a Synthetic run on dataset frames
+<cache>/<id>/synthetic_frames.json alone (its degraded images are not kept). Jobs in progress are under
 <cache>/.staging/<job id>/.
 Cached artifacts are for local use only. Deleting the folder, or any entry in it, is always safe.
 """
@@ -27,13 +28,21 @@ from backend.benchmark_run import BenchmarkExperiment
 from backend.detection import ModelInfo
 from backend.experiment import DegradationSettings, Experiment, FrameVariant
 from backend.subset import Manifest
+from backend.synthetic_frames import SyntheticFramesExperiment
 
 # A sha256 hex digest, as experiment_id() makes. Checked before any path is built from an id, so an id from a
 # URL can never name a file outside the cache (on Windows a backslash would otherwise act as a separator).
 EXPERIMENT_ID = re.compile(r"[0-9a-f]{64}")
 
 # The file each kind of experiment is stored in. An entry holds one of them.
-RECORD_FILES = {Experiment: "experiment.json", BenchmarkExperiment: "benchmark.json"}
+RECORD_FILES = {
+    Experiment: "experiment.json",
+    BenchmarkExperiment: "benchmark.json",
+    SyntheticFramesExperiment: "synthetic_frames.json",
+}
+Record = Experiment | BenchmarkExperiment | SyntheticFramesExperiment
+# The Synthetic runs, on video and on dataset frames: the run history lists both.
+SyntheticRecord = Experiment | SyntheticFramesExperiment
 
 _fingerprints: dict[tuple[Path, int, int], str] = {}
 
@@ -72,6 +81,27 @@ def benchmark_experiment_id(
     return _digest(key)
 
 
+def synthetic_frames_experiment_id(
+    manifest: Manifest,
+    condition: str,
+    model: ModelInfo,
+    class_mapping_version: int,
+    confidence_floor: float,
+    degradation: DegradationSettings,
+) -> str:
+    """Like benchmark_experiment_id(), plus the clear condition degraded and the degradation, seed included."""
+    key = {
+        "mode": "synthetic-frames",
+        "manifest": asdict(manifest),
+        "condition": condition,
+        "model": {"name": model.name, "version": model.version},
+        "class_mapping_version": class_mapping_version,
+        "confidence_floor": confidence_floor,
+        "degradation": degradation.model_dump(),
+    }
+    return _digest(key)
+
+
 def _digest(key: dict) -> str:
     return hashlib.sha256(json.dumps(key, sort_keys=True).encode()).hexdigest()
 
@@ -91,7 +121,7 @@ def fingerprint(path: Path) -> str:
 
 @dataclass(frozen=True)
 class CacheEntry:
-    experiment: Experiment
+    experiment: SyntheticRecord
     saved_at: datetime
 
 
@@ -99,16 +129,20 @@ class ExperimentCache:
     def __init__(self, root: Path):
         self.root = root
         # Parsed records by id and kind, with the file's mtime: every frame request needs its experiment.
-        self._loaded: dict[tuple[str, type], tuple[int, Experiment | BenchmarkExperiment]] = {}
+        self._loaded: dict[tuple[str, type], tuple[int, Record]] = {}
         # Whatever is staged now was left by a server that stopped mid-run.
         shutil.rmtree(self.root / ".staging", ignore_errors=True)
 
     def load(self, experiment_id: str) -> Experiment | None:
-        entry = self._entry(experiment_id)
-        return entry.experiment if entry else None
+        loaded = self._read(experiment_id, Experiment)
+        return loaded[1] if loaded else None
 
     def load_benchmark(self, experiment_id: str) -> BenchmarkExperiment | None:
         loaded = self._read(experiment_id, BenchmarkExperiment)
+        return loaded[1] if loaded else None
+
+    def load_synthetic_frames(self, experiment_id: str) -> SyntheticFramesExperiment | None:
+        loaded = self._read(experiment_id, SyntheticFramesExperiment)
         return loaded[1] if loaded else None
 
     def staging(self, job_id: str) -> Path:
@@ -123,7 +157,7 @@ class ExperimentCache:
             self.frame_in(folder, variant, 0).parent.mkdir(parents=True)
         return folder
 
-    def commit(self, folder: Path, experiment: Experiment | BenchmarkExperiment) -> None:
+    def commit(self, folder: Path, experiment: Record) -> None:
         """Make a staged run a complete entry: its record first, then the whole folder moves into place."""
         folder.mkdir(parents=True, exist_ok=True)
         (folder / RECORD_FILES[type(experiment)]).write_text(experiment.model_dump_json())
@@ -139,11 +173,22 @@ class ExperimentCache:
         return self.frame_in(self.root / experiment_id, variant, index)
 
     def entries(self) -> list[CacheEntry]:
-        """Every complete experiment, newest first."""
+        """Every complete Synthetic run, on video or on dataset frames, newest first."""
         if not self.root.is_dir():
             return []
-        entries = [entry for folder in self.root.iterdir() if (entry := self._entry(folder.name))]
+        entries = [
+            CacheEntry(experiment=loaded[1], saved_at=datetime.fromtimestamp(loaded[0] / 1e9, UTC))
+            for folder in self.root.iterdir()
+            for kind in (Experiment, SyntheticFramesExperiment)
+            if (loaded := self._read(folder.name, kind))
+        ]
         return sorted(entries, key=lambda entry: entry.saved_at, reverse=True)
+
+    def synthetic_frames_runs(self) -> list[SyntheticFramesExperiment]:
+        """Every complete Synthetic run on dataset frames, in no particular order. Reads no other kind of record."""
+        if not self.root.is_dir():
+            return []
+        return [loaded[1] for folder in self.root.iterdir() if (loaded := self._read(folder.name, SyntheticFramesExperiment))]
 
     def size_bytes(self) -> int:
         total = 0
@@ -154,15 +199,7 @@ class ExperimentCache:
                 pass
         return total
 
-    def _entry(self, experiment_id: str) -> CacheEntry | None:
-        """A Synthetic run, with when it was saved."""
-        loaded = self._read(experiment_id, Experiment)
-        if loaded is None:
-            return None
-        mtime, experiment = loaded
-        return CacheEntry(experiment=experiment, saved_at=datetime.fromtimestamp(mtime / 1e9, UTC))
-
-    def _read[T: (Experiment, BenchmarkExperiment)](self, experiment_id: str, kind: type[T]) -> tuple[int, T] | None:
+    def _read[T: (Experiment, BenchmarkExperiment, SyntheticFramesExperiment)](self, experiment_id: str, kind: type[T]) -> tuple[int, T] | None:
         """The entry's record of this kind and its file's mtime, or None."""
         if not EXPERIMENT_ID.fullmatch(experiment_id):
             return None

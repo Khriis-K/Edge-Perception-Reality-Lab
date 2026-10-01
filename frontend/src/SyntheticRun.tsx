@@ -1,34 +1,50 @@
-import { Button, HTMLSelect } from "@blueprintjs/core";
+import { Button, HTMLSelect, Radio, RadioGroup } from "@blueprintjs/core";
 import { useEffect, useState } from "react";
 import {
   fetchSamples,
   previewRun,
+  type ClearCondition,
   type DegradationSettings,
+  type ExperimentSummary,
   type Job,
   type RunPreview,
   type SampleVideo,
 } from "./api/client";
+import { conditionName } from "./benchmarkFormat";
 import { completedJobId, isActive, useCurrentJob } from "./CurrentJob";
 import { useDegradationSettings } from "./DegradationSettings";
 import { FrameViewer } from "./FrameViewer";
+import { useSubsetChoice } from "./SubsetChoice";
+import { useSubset } from "./SubsetTable";
+import { SyntheticFramesView } from "./SyntheticFrames";
 import { useSyntheticResults } from "./SyntheticResults";
+import { useDatasetStatus } from "./useDatasetStatus";
+
+type Input = ExperimentSummary["input"];
+const CLEAR_CONDITIONS: ClearCondition[] = ["clear-day", "clear-night"];
 
 /**
- * Synthetic screen: pick the sample video and run it with the degradation set in the inspector,
- * then compare clean and degraded frames side by side.
+ * Synthetic screen: pick the sample video, or the clear-weather frames of the subset chosen in Setup, and run it with
+ * the degradation set in the inspector. A video run compares clean and degraded frames side by side; a run on the
+ * labelled dataset frames also scores both against the ground truth.
  */
 export function SyntheticRun() {
-  const { job, error, start, cancel } = useCurrentJob();
+  const { job, error, start, startSyntheticFrames, cancel } = useCurrentJob();
   const { settings } = useDegradationSettings();
+  const [input, setInput] = useState<Input>("video");
   const [samples, setSamples] = useState<SampleVideo[]>([]);
   const [sampleId, setSampleId] = useState("");
   const [samplesError, setSamplesError] = useState<string | null>(null);
-  const { results, error: resultsError, openId, frameIndex, setFrameIndex } = useSyntheticResults();
+  const [condition, setCondition] = useState<ClearCondition>("clear-day");
+  const dataset = useClearFrames();
+  const { results, framesResults, error: resultsError, openId, frameIndex, setFrameIndex } = useSyntheticResults();
   const running = isActive(job);
-  const preview = useRunPreview(sampleId, settings);
+  const preview = useRunPreview(input === "video" ? sampleId : "", settings);
+  const manifest = dataset.subset?.manifest;
+  const canStart = input === "video" ? Boolean(sampleId) : Boolean(manifest?.frames[condition]?.length);
   // A finished job's "Done" would be wrong next to another run opened from the history. A Benchmark run's status
   // belongs to its own screen, though while it runs, Start run stays disabled: one run at a time.
-  const synthetic = job?.mode === "synthetic" ? job : null;
+  const synthetic = job?.mode === "synthetic" || job?.mode === "synthetic-frames" ? job : null;
   const status = synthetic?.status === "completed" && synthetic.experiment_id !== openId ? null : synthetic;
 
   useEffect(() => {
@@ -46,20 +62,49 @@ export function SyntheticRun() {
         className="run-form"
         onSubmit={(event) => {
           event.preventDefault();
-          start(sampleId, settings);
+          if (input === "video") start(sampleId, settings);
+          else if (manifest) startSyntheticFrames(manifest, condition, settings);
         }}
       >
-        <label>
-          Sample video
-          <HTMLSelect value={sampleId} onChange={(e) => setSampleId(e.target.value)} disabled={running}>
-            {samples.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.title}
-              </option>
-            ))}
-          </HTMLSelect>
-        </label>
-        <Button type="submit" intent="primary" disabled={!sampleId || running}>
+        <RadioGroup
+          label="Input"
+          inline
+          selectedValue={input}
+          disabled={running}
+          onChange={(e) => setInput(e.currentTarget.value as Input)}
+        >
+          <Radio label="Video" value="video" />
+          <Radio label="Clear dataset frames" value="dataset" disabled={running || !dataset.ready} />
+        </RadioGroup>
+        {input === "video" ? (
+          <label>
+            Sample video
+            <HTMLSelect value={sampleId} onChange={(e) => setSampleId(e.target.value)} disabled={running}>
+              {samples.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.title}
+                </option>
+              ))}
+            </HTMLSelect>
+          </label>
+        ) : (
+          <label>
+            Frames
+            <HTMLSelect
+              value={condition}
+              onChange={(e) => setCondition(e.target.value as ClearCondition)}
+              disabled={running}
+            >
+              {CLEAR_CONDITIONS.map((c) => (
+                <option key={c} value={c}>
+                  {conditionName(c)}
+                  {manifest && ` (${frameCount(manifest.frames[c]?.length ?? 0)})`}
+                </option>
+              ))}
+            </HTMLSelect>
+          </label>
+        )}
+        <Button type="submit" intent="primary" disabled={!canStart || running}>
           Start run
         </Button>
         {running && (
@@ -74,8 +119,14 @@ export function SyntheticRun() {
         )}
       </form>
 
+      {input === "dataset" && dataset.subset && (
+        <p className="field-note">
+          From the subset chosen in Setup: seed {dataset.subset.manifest.seed}, up to {dataset.subset.manifest.cap}{" "}
+          frames per condition. Results also appear as a condition in Benchmark.
+        </p>
+      )}
       <RunStatus job={status} />
-      {[samplesError, error, resultsError].filter(Boolean).map((message) => (
+      {[samplesError, dataset.error, error, resultsError].filter(Boolean).map((message) => (
         <p key={message} role="alert" className="run-error">
           {message}
         </p>
@@ -89,8 +140,22 @@ export function SyntheticRun() {
           onFrameIndexChange={setFrameIndex}
         />
       )}
+      {framesResults && <SyntheticFramesView results={framesResults} />}
     </div>
   );
+}
+
+function frameCount(count: number): string {
+  return `${count} ${count === 1 ? "frame" : "frames"}`;
+}
+
+/** The subset chosen in Setup, whose clear frames a run can degrade. None until the dataset is ready. */
+function useClearFrames() {
+  const { status } = useDatasetStatus();
+  const ready = status?.ready ?? false;
+  const [choice] = useSubsetChoice();
+  const { subset, error } = useSubset(ready, choice);
+  return { ready, subset, error: error && `Couldn't draw the subset: ${error}` };
 }
 
 function RunStatus({ job }: { job: Job | null }) {

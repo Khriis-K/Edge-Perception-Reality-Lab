@@ -1,14 +1,15 @@
 import { Button } from "@blueprintjs/core";
-import { useState, type ChangeEvent } from "react";
-import type { ConditionResult, Job, Manifest } from "./api/client";
+import { useState, type ChangeEvent, type ReactNode } from "react";
+import type { ClassMetrics, ConditionResult, Job, Manifest, SyntheticConditionResult } from "./api/client";
 import { useBenchmarkFrame } from "./BenchmarkFrame";
 import { useBenchmarkResults } from "./BenchmarkResults";
 import { BenchmarkViewer } from "./BenchmarkViewer";
 import { conditionName, formatMetric } from "./benchmarkFormat";
-import { scoreParts } from "./frameReview";
 import { isActive, useCurrentJob } from "./CurrentJob";
 import { useSubsetChoice } from "./SubsetChoice";
 import { useSubset } from "./SubsetTable";
+import { scoreParts } from "./frameReview";
+import { ThresholdField } from "./ThresholdField";
 import { useDatasetStatus } from "./useDatasetStatus";
 
 /**
@@ -101,7 +102,7 @@ function BenchmarkStatus({ job }: { job: Job | null }) {
 }
 
 function BenchmarkBody({ onOpenInspector }: { onOpenInspector: () => void }) {
-  const { results, selected } = useBenchmarkResults();
+  const { results, threshold, setThreshold, selected } = useBenchmarkResults();
   if (!results) return null;
 
   return (
@@ -113,17 +114,42 @@ function BenchmarkBody({ onOpenInspector }: { onOpenInspector: () => void }) {
           ))}
         </ul>
       )}
-      <BenchmarkViewer onOpenInspector={onOpenInspector} />
-      {selected && <ClassTable condition={selected} threshold={results.display_threshold} lowN={results.low_n_objects} />}
+      {/* A synthetic row's degraded images aren't kept, so it has no frames to view: just the threshold. */}
+      {selected && "experiment_id" in selected ? (
+        <ThresholdField threshold={threshold} onChange={setThreshold} />
+      ) : (
+        <BenchmarkViewer onOpenInspector={onOpenInspector} />
+      )}
+      {selected && (
+        <ClassTable
+          title={"experiment_id" in selected ? syntheticName(selected) : conditionName(selected.condition)}
+          condition={selected}
+          threshold={results.display_threshold}
+          lowN={results.low_n_objects}
+        />
+      )}
     </>
   );
 }
 
-function ClassTable({ condition, threshold, lowN }: { condition: ConditionResult; threshold: number; lowN: number }) {
+/** "Synthetic fog 0.60 on Clear · day frames". */
+function syntheticName(row: SyntheticConditionResult): string {
+  return `${row.title} on ${conditionName(row.condition)} frames`;
+}
+
+type ClassTableProps = {
+  title: string;
+  condition: { map: number | null; frames: number; classes: ClassMetrics[] };
+  threshold: number;
+  lowN: number;
+};
+
+/** Per-class AP, precision and recall for one condition, with the counts behind each. */
+export function ClassTable({ title, condition, threshold, lowN }: ClassTableProps) {
   return (
     <table className="subset-table class-table">
       <caption>
-        {conditionName(condition.condition)}: mAP {formatMetric(condition.map)} over {condition.frames} frames.
+        {title}: mAP {formatMetric(condition.map)} over {condition.frames} frames.
         Precision and recall at confidence ≥ {threshold.toFixed(2)}; <span className="low-n">low n</span>: fewer
         than {lowN} objects.
       </caption>
@@ -158,8 +184,9 @@ function ClassTable({ condition, threshold, lowN }: { condition: ConditionResult
 const SHOWN_FRAMES = 10; // per expanded condition; the rest are in the dock's Frame table
 
 /**
- * Benchmark's explorer: every condition in the run's manifest with its mAP, then the manifest and model. Clicking a
- * condition selects and expands it to its frames, worst first; clicking it again collapses it.
+ * Benchmark's explorer: every condition in the run's manifest with its mAP, then the synthetic degradations run on
+ * its clear frames, then the manifest and model. Clicking a real condition selects and expands it to its frames,
+ * worst first; clicking it again collapses it.
  */
 export function BenchmarkExplorer({ empty }: { empty: string }) {
   const { results, selected, select } = useBenchmarkResults();
@@ -168,36 +195,44 @@ export function BenchmarkExplorer({ empty }: { empty: string }) {
   // A load error is shown in the work area; results already loaded stay listed beside it.
   if (!results) return <p className="empty-state">{empty}</p>;
   const { manifest, model } = results;
+  const selectedKey = selected && ("experiment_id" in selected ? selected.experiment_id : selected.condition);
   return (
     <div className="run-explorer">
       <ul aria-label="Conditions" className="run-list">
         {results.conditions.map((row) => (
-          <li key={row.condition}>
-            <button
-              type="button"
-              className="run-item"
-              aria-current={row.condition === selected?.condition ? "true" : undefined}
-              aria-expanded={row.condition === expanded}
-              onClick={() => {
-                select(row.condition);
-                setExpanded(row.condition === expanded ? null : row.condition);
-              }}
-            >
-              <span>{conditionName(row.condition)}</span>
-              <span className="run-meta">
-                mAP {formatMetric(row.map)} · {row.objects} {row.objects === 1 ? "object" : "objects"}
-                {row.low_n && (
-                  <>
-                    {" · "}
-                    <span className="low-n">low n</span>
-                  </>
-                )}
-              </span>
-            </button>
-            {row.condition === expanded && row.condition === selected?.condition && <FrameList />}
-          </li>
+          <ConditionItem
+            key={row.condition}
+            row={row}
+            name={conditionName(row.condition)}
+            current={row.condition === selectedKey}
+            expanded={row.condition === expanded}
+            onSelect={() => {
+              select(row.condition);
+              setExpanded(row.condition === expanded ? null : row.condition);
+            }}
+          >
+            {row.condition === expanded && row.condition === selectedKey && <FrameList />}
+          </ConditionItem>
         ))}
       </ul>
+      {results.synthetic.length > 0 && (
+        <>
+          <h3 className="run-group">Synthetic, on clear frames</h3>
+          {/* Its name leaves out "conditions": lists are found by name, and this must never pass for the real ones. */}
+          <ul aria-label="Synthetic degradations" className="run-list">
+            {results.synthetic.map((row) => (
+              <ConditionItem
+                key={row.experiment_id}
+                row={row}
+                name={row.title}
+                detail={`${conditionName(row.condition)} frames, seed ${row.degradation.seed}`}
+                current={row.experiment_id === selectedKey}
+                onSelect={() => select(row.experiment_id)}
+              />
+            ))}
+          </ul>
+        </>
+      )}
       <footer className="cache-info">
         <span>Frames ranked by error score at confidence ≥ {results.display_threshold.toFixed(2)}</span>
         <span>
@@ -208,6 +243,44 @@ export function BenchmarkExplorer({ empty }: { empty: string }) {
         </span>
       </footer>
     </div>
+  );
+}
+
+type ConditionItemProps = {
+  row: ConditionResult;
+  name: string;
+  detail?: string;
+  current: boolean;
+  /** Set on rows that expand to their frames; synthetic rows have none. */
+  expanded?: boolean;
+  onSelect: () => void;
+  children?: ReactNode;
+};
+
+function ConditionItem({ row, name, detail, current, expanded, onSelect, children }: ConditionItemProps) {
+  return (
+    <li>
+      <button
+        type="button"
+        className="run-item"
+        aria-current={current ? "true" : undefined}
+        aria-expanded={expanded}
+        onClick={onSelect}
+      >
+        <span>{name}</span>
+        <span className="run-meta">
+          {detail && `${detail} · `}
+          mAP {formatMetric(row.map)} · {row.objects} {row.objects === 1 ? "object" : "objects"}
+          {row.low_n && (
+            <>
+              {" · "}
+              <span className="low-n">low n</span>
+            </>
+          )}
+        </span>
+      </button>
+      {children}
+    </li>
   );
 }
 
