@@ -7,4 +7,4 @@ import { fileURLToPath } from "node:url";
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const python = resolve(repo, process.platform === "win32" ? ".venv/Scripts/python.exe" : ".venv/bin/python");
 
-execFileSync(python, ["scripts/frontend_bundle.py", "stamp"], { cwd: repo, stdio: "inherit" });
+execFileSync(python, ["scripts/frontend_bundle.py"], { cwd: repo, stdio: "inherit" });

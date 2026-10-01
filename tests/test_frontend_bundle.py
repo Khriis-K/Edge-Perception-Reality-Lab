@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.frontend_bundle import FRONTEND, STAMP, is_current, source_digest, stamp
+from scripts.frontend_bundle import BUILD_INPUTS, FRONTEND, STAMP, is_current, source_digest, stamp
 
 
 @pytest.fixture
@@ -12,8 +12,8 @@ def frontend(tmp_path) -> Path:
     root = tmp_path / "frontend"
     (root / "src").mkdir(parents=True)
     (root / "e2e").mkdir()
-    (root / "index.html").write_text("<div id=root></div>\n")
-    (root / "package-lock.json").write_text("{}\n")
+    for name in BUILD_INPUTS:
+        (root / name).write_text(f"{name}\n")
     (root / "src" / "main.tsx").write_text("render();\n")
     (root / "src" / "overlay.ts").write_text("export const x = 1;\n")
     (root / "dist").mkdir()
@@ -57,6 +57,24 @@ def test_files_that_never_reach_the_bundle_are_ignored(frontend, path):
     (frontend / path).write_text("anything\n")
 
     assert source_digest(frontend) == before
+
+
+@pytest.mark.parametrize("path", ["src/.DS_Store", "src/.overlay.ts.swp"])
+def test_hidden_clutter_in_the_sources_is_ignored(frontend, path):
+    """Untracked OS and editor files must not make a correct bundle look stale."""
+    before = source_digest(frontend)
+
+    (frontend / path).write_text("clutter\n")
+
+    assert source_digest(frontend) == before
+
+
+def test_a_missing_build_input_fails_loudly(frontend):
+    """A renamed config (say vite.config.mts) must not silently drop out of the digest."""
+    (frontend / "vite.config.ts").unlink()
+
+    with pytest.raises(FileNotFoundError, match="vite.config.ts"):
+        source_digest(frontend)
 
 
 def test_line_endings_dont_matter(frontend):

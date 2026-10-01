@@ -1,14 +1,12 @@
-"""Stamp the built frontend with a digest of the sources it was built from, or check that stamp.
+"""Stamp the built frontend with a digest of the sources it was built from.
 
 frontend/dist is committed so reviewers can run the app with Python only. `npm run build` stamps it; pytest fails
 when the sources have changed since, so a stale bundle can't be committed unnoticed.
 
-    .venv/Scripts/python.exe scripts/frontend_bundle.py stamp
-    .venv/Scripts/python.exe scripts/frontend_bundle.py check
+    .venv/Scripts/python.exe scripts/frontend_bundle.py
 """
 
 import hashlib
-import sys
 from pathlib import Path
 
 FRONTEND = Path(__file__).resolve().parents[1] / "frontend"
@@ -20,9 +18,18 @@ SOURCE_DIRS = ("src", "public")
 
 
 def _inputs(frontend: Path) -> list[Path]:
-    files = [frontend / name for name in BUILD_INPUTS if (frontend / name).is_file()]
+    """Every build input. A missing one is an error, so a renamed config can't silently drop out of the digest.
+    Hidden files (.DS_Store, editor swap files) and unit tests are skipped: they never reach the bundle."""
+    files = [frontend / name for name in BUILD_INPUTS]
+    missing = [path.name for path in files if not path.is_file()]
+    if missing:
+        raise FileNotFoundError(f"Frontend build inputs not found: {', '.join(missing)}. Update BUILD_INPUTS.")
     for folder in SOURCE_DIRS:
-        files += [p for p in (frontend / folder).rglob("*") if p.is_file() and ".test." not in p.name]
+        files += [
+            p
+            for p in (frontend / folder).rglob("*")
+            if p.is_file() and not p.name.startswith(".") and ".test." not in p.name
+        ]
     return sorted(files, key=lambda p: p.relative_to(frontend).as_posix())
 
 
@@ -45,12 +52,4 @@ def is_current(frontend: Path) -> bool:
 
 
 if __name__ == "__main__":
-    command = sys.argv[1] if len(sys.argv) > 1 else ""
-    if command == "stamp":
-        stamp(FRONTEND)
-    elif command == "check":
-        if not is_current(FRONTEND):
-            sys.exit("frontend/dist is stale: run `npm --prefix frontend run build` and commit frontend/dist")
-        print("frontend/dist is current.")
-    else:
-        sys.exit(__doc__)
+    stamp(FRONTEND)

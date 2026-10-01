@@ -39,7 +39,7 @@ Two sample videos are bundled:
 
 ### Pinned versions
 
-Direct dependencies are pinned exactly in [`pyproject.toml`](pyproject.toml), and [`constraints.txt`](constraints.txt) pins every package a CPU install resolves to, frozen from a clean Python 3.13 venv. The frontend's packages are pinned by `frontend/package-lock.json`. Tested with Python 3.13 and 3.14, and Node.js 20+ for frontend work.
+Direct dependencies are pinned exactly in [`pyproject.toml`](pyproject.toml), and [`constraints.txt`](constraints.txt) pins every package a CPU install with the dev tools resolves to, frozen from a clean Python 3.13 venv. Packages the GPU build adds (the NVIDIA runtime libraries) aren't in it. The frontend's packages are pinned by `frontend/package-lock.json`. Tested with Python 3.13 and 3.14, and Node.js 20+ for frontend work.
 
 ## Benchmark mode: connect SeeingThroughFog (optional)
 
@@ -133,7 +133,7 @@ The clip reports the retention rate, the introduced rate, the class-change count
 
 AP per class is the area under the interpolated precision-recall curve over all points, with tied confidences forming one point. mAP is the mean over the classes that have objects. Precision and recall are also shown at the display threshold you choose. Detections are kept down to a confidence floor of 0.05, so changing the threshold or drawing curves never re-runs inference. On dataset frames, Synthetic mode reports both stability and accuracy.
 
-**Sample sizes.** Every metric shows its object and frame counts, and is flagged **low n** below 30 objects. A condition is low n when any class in its mAP is. On video, objects are counted as detections across frames, and consecutive frames of one object aren't independent evidence, so there the flag under-warns ([ADR 0001](docs/adr/0001-count-detections-not-objects-on-video.md)).
+**Sample sizes.** Every metric shows its object and frame counts, and is flagged **low n** below 30 objects. A condition is low n when any class in its mAP is, or when it has no objects at all. On video, objects are counted as detections across frames, and consecutive frames of one object aren't independent evidence, so there the flag under-warns ([ADR 0001](docs/adr/0001-count-detections-not-objects-on-video.md)).
 
 **Worst frames.** Each frame gets a score, and the app shows every contributing value next to it:
 
@@ -195,7 +195,7 @@ Every frame is timed with `time.perf_counter`, stage by stage:
 - **processing**: letterboxing before inference, and decoding plus NMS after it;
 - **render**: encoding frames into the cache.
 
-The first 2 frames are warm-up and are left out of every stage, because a fresh session allocates memory and picks kernels on its first calls. Each stage reports p50 and p90. Effective fps is 1000 / (read p50 + processing p50 + inference p50); degrading and rendering are left out, because a deployed detector wouldn't do them. The execution provider is recorded with every run. The numbers are this machine's timing only, not a real-time claim for other hardware. Full method: [`backend/latency.py`](backend/latency.py).
+A Benchmark run reads dataset images and degrades and renders nothing, so it has no degrade or render stage (shown as none, never 0 ms). The first 2 frames are warm-up and are left out of every stage, because a fresh session allocates memory and picks kernels on its first calls. Each stage reports p50 and p90. Effective fps is 1000 / (read p50 + processing p50 + inference p50); degrading and rendering are left out, because a deployed detector wouldn't do them. The execution provider is recorded with every run. The numbers are this machine's timing only, not a real-time claim for other hardware. Full method: [`backend/latency.py`](backend/latency.py).
 
 ## Local files and removing cached artifacts
 
@@ -244,7 +244,7 @@ npm --prefix frontend run dev               # http://127.0.0.1:5173
 
 `--dev` is the only mode that enables CORS, and only for the Vite dev server's origin.
 
-**The built frontend is committed.** After changing anything under `frontend/src` (or the frontend's dependencies), run `npm --prefix frontend run build` and commit `frontend/dist`. The build stamps `dist` with a digest of its sources, and `pytest` fails if they no longer match, so a stale bundle can't be committed unnoticed.
+**The built frontend is committed.** After changing anything under `frontend/src` (or the frontend's dependencies or build config), run `npm --prefix frontend run build` and commit `frontend/dist`. The build needs the project's `.venv` as well as Node.js. The build stamps `dist` with a digest of its sources, and `pytest` fails if they no longer match, so a stale bundle can't be committed unnoticed.
 
 The frontend's API types are generated from the backend's OpenAPI schema. After changing a Pydantic model:
 
