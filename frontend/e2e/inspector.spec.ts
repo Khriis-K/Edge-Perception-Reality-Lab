@@ -107,6 +107,30 @@ test.describe("below 1280 px", () => {
     }
   });
 
+  test("a drawer taller than the window scrolls its body, and the header stays put (#45)", async ({ page }) => {
+    await page.setViewportSize({ width: NARROW.width, height: 400 });
+    await page.goto("/synthetic");
+    await page.getByLabel("Sample video").selectOption("synthetic-traffic");
+    await page.getByRole("button", { name: "Start run" }).click();
+    await expect(page.getByRole("region", { name: "Frame viewer" })).toBeVisible({ timeout: 15_000 });
+    await toggle(page).click();
+    await expect(drawer(page)).toBeFocused();
+
+    const latency = drawer(page).getByRole("region", { name: "Latency" });
+    const header = drawer(page).getByRole("heading", { name: "Inspector" });
+    const viewportHeight = 400;
+    expect((await latency.boundingBox())!.y).toBeGreaterThan(viewportHeight);
+
+    await drawer(page).hover();
+    await page.mouse.wheel(0, 5000);
+
+    await expect(async () => {
+      const box = (await latency.boundingBox())!;
+      expect(box.y + box.height).toBeLessThanOrEqual(viewportHeight + 1); // sub-pixel rounding
+    }).toPass();
+    await expect(header).toBeInViewport();
+  });
+
   test("has no accessibility violations, with the drawer closed or open", async ({ page }) => {
     await page.goto("/setup");
     await expect(toggle(page)).toBeVisible();

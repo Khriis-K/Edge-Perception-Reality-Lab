@@ -172,7 +172,7 @@ function InspectorDrawer({ isOpen, onClose, children }: { isOpen: boolean; onClo
           <h2 id="inspector-drawer-title">Inspector</h2>
           <Button aria-label="Close" icon="cross" variant="minimal" size="small" onClick={onClose} />
         </div>
-        {children}
+        <div className="inspector-drawer-body">{children}</div>
       </div>
     </Drawer>
   );
