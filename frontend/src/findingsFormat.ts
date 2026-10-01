@@ -1,8 +1,8 @@
 import type { BenchmarkFindings, FrameReliability, FrameScore, HeatmapCell, VideoFindings } from "./api/client";
+import { formatMetric } from "./benchmarkFormat";
 
 type BenchmarkWeights = BenchmarkFindings["record"]["weights"];
 type StabilityWeights = VideoFindings["record"]["weights"];
-import { formatMetric } from "./benchmarkFormat";
 
 /**
  * Why a Benchmark frame ranks among the worst, in one line: its largest weighted contribution to the error score.
