@@ -22,7 +22,7 @@ const BAR_HEIGHT = 14;
 export function DropBars({ synthetic, real }: { synthetic: Comparison | null; real: Comparison | null }) {
   const sides = [
     { key: "synthetic", name: synthetic?.title ?? "Synthetic fog", color: SYNTHETIC, comparison: synthetic },
-    { key: "real", name: "Real fog · day", color: REAL, comparison: real },
+    { key: "real", name: real?.title ?? "Real fog", color: REAL, comparison: real },
   ];
   const classes = (real ?? synthetic)?.classes.map((c) => c.class_name) ?? [];
   const drops = sides.flatMap((s) => s.comparison?.classes.map((c) => c.drop) ?? []).filter((d) => d !== null);
@@ -122,9 +122,20 @@ export function ApHeatmap({ rows, lowN }: { rows: HeatmapRow[]; lowN: number }) 
               </span>
             </th>
             {row.cells.map((cell) => (
-              <HeatCell key={cell.class_name} text={heatmapCellText(cell)} ap={cell.ap} objects={cell.objects} />
+              <HeatCell
+                key={cell.class_name}
+                text={heatmapCellText(cell)}
+                ap={cell.ap}
+                objects={cell.objects}
+                frames={cell.frames}
+              />
             ))}
-            <HeatCell text={`${formatMetric(row.map)}${row.low_n && row.map !== null ? "*" : ""}`} ap={row.map} objects={row.objects} />
+            <HeatCell
+              text={`${formatMetric(row.map)}${row.low_n && row.map !== null ? "*" : ""}`}
+              ap={row.map}
+              objects={row.objects}
+              frames={row.frames}
+            />
           </tr>
         ))}
       </tbody>
@@ -132,13 +143,13 @@ export function ApHeatmap({ rows, lowN }: { rows: HeatmapRow[]; lowN: number }) 
   );
 }
 
-function HeatCell({ text, ap, objects }: { text: string; ap: number | null; objects: number }) {
+function HeatCell({ text, ap, objects, frames }: { text: string; ap: number | null; objects: number; frames: number }) {
   const fill = ap === null ? undefined : apColor(ap);
   return (
     <td style={fill ? { background: fill, color: textColorOn(fill) } : undefined}>
       <span className="heatmap-value">{text}</span>
       <span className="heatmap-counts">
-        {objects} {objects === 1 ? "obj" : "objs"}
+        {objects} {objects === 1 ? "obj" : "objs"} · {frames} fr
       </span>
     </td>
   );
@@ -148,9 +159,11 @@ const TIMELINE_WIDTH = 640;
 const TIMELINE_HEIGHT = 140;
 const MARGIN = { top: 8, right: 8, bottom: 22, left: 32 };
 
-/** Frame-by-frame stability score on a video run, so a sudden failure shows as a spike. Video runs only. */
-export function ReliabilityTimeline({ timeline }: { timeline: FrameReliability[] }) {
-  const peak = timeline.reduce<FrameReliability | null>((worst, p) => (!worst || p.score > worst.score ? p : worst), null);
+/**
+ * Frame-by-frame stability score on a video run, so a sudden failure shows as a spike. Video runs only. `worst` is the
+ * server's worst frame, or null when no frame changed.
+ */
+export function ReliabilityTimeline({ timeline, worst: peak }: { timeline: FrameReliability[]; worst: FrameReliability | null }) {
   const x = scaleBand<number>()
     .domain(timeline.map((p) => p.index))
     .range([MARGIN.left, TIMELINE_WIDTH - MARGIN.right])
@@ -165,7 +178,7 @@ export function ReliabilityTimeline({ timeline }: { timeline: FrameReliability[]
     <figure className="chart">
       <svg
         role="img"
-        aria-label={`Stability score for each of ${timeline.length} frames; highest ${peak ? `${peak.score.toFixed(2)} at frame ${peak.index}` : "none"}`}
+        aria-label={`Stability score for each of ${timeline.length} frames; highest ${peak ? `${peak.score.toFixed(2)} at frame ${peak.index}` : "0"}`}
         viewBox={`0 0 ${TIMELINE_WIDTH} ${TIMELINE_HEIGHT}`}
         width="100%"
         style={{ maxWidth: TIMELINE_WIDTH }}
@@ -195,7 +208,7 @@ export function ReliabilityTimeline({ timeline }: { timeline: FrameReliability[]
           frame (dropped + introduced + class changes + confidence lost)
         </span>
         <span>
-          {peak && peak.score > 0
+          {peak
             ? `Least stable: frame ${peak.index}, score ${peak.score.toFixed(2)}`
             : "No frame changed under the degradation."}
         </span>

@@ -12,25 +12,34 @@ const frame = (counts: { hits?: number; misses?: number; false_alarms?: number; 
   ...counts,
 });
 
+const UNIT = { misses: 1, false_alarms: 1, class_confusions: 1 };
+
 describe("worstReason", () => {
   it("names misses against every labelled object when they dominate", () => {
-    expect(worstReason(frame({ hits: 1, misses: 3, class_confusions: 1 }))).toBe("Missed 3 of 5 labelled objects");
+    expect(worstReason(frame({ hits: 1, misses: 3, class_confusions: 1 }), UNIT)).toBe("Missed 3 of 5 labelled objects");
   });
 
   it("names false alarms when they dominate", () => {
-    expect(worstReason(frame({ false_alarms: 2, misses: 1, hits: 1 }))).toBe(
+    expect(worstReason(frame({ false_alarms: 2, misses: 1, hits: 1 }), UNIT)).toBe(
       "2 detections where nothing is labelled (false alarms)",
     );
-    expect(worstReason(frame({ false_alarms: 1 }))).toBe("1 detection where nothing is labelled (a false alarm)");
+    expect(worstReason(frame({ false_alarms: 1 }), UNIT)).toBe("1 detection where nothing is labelled (a false alarm)");
   });
 
   it("names class confusions when they dominate", () => {
-    expect(worstReason(frame({ class_confusions: 2, hits: 1 }))).toBe("2 objects found but given the wrong class");
+    expect(worstReason(frame({ class_confusions: 2, hits: 1 }), UNIT)).toBe("2 objects found but given the wrong class");
+  });
+
+  it("weighs each count by the score's own weights", () => {
+    const heavyConfusions = { misses: 1, false_alarms: 1, class_confusions: 3 };
+    expect(worstReason(frame({ misses: 2, class_confusions: 1 }), heavyConfusions)).toBe(
+      "1 object found but given the wrong class",
+    );
   });
 
   it("breaks ties toward misses, then false alarms", () => {
-    expect(worstReason(frame({ misses: 1, false_alarms: 1, class_confusions: 1 }))).toBe("Missed 1 of 2 labelled objects");
-    expect(worstReason(frame({ false_alarms: 1, class_confusions: 1 }))).toBe(
+    expect(worstReason(frame({ misses: 1, false_alarms: 1, class_confusions: 1 }), UNIT)).toBe("Missed 1 of 2 labelled objects");
+    expect(worstReason(frame({ false_alarms: 1, class_confusions: 1 }), UNIT)).toBe(
       "1 detection where nothing is labelled (a false alarm)",
     );
   });
@@ -47,12 +56,17 @@ const point = (counts: { dropped?: number; introduced?: number; class_changes?: 
   ...counts,
 });
 
+const UNIT_STABILITY = { dropped: 1, introduced: 1, class_changes: 1, confidence_loss: 1 };
+
 describe("reliabilityReason", () => {
   it("names the largest contribution to the stability score", () => {
-    expect(reliabilityReason(point({ dropped: 2, introduced: 1 }))).toBe("2 clean detections lost under the degradation");
-    expect(reliabilityReason(point({ introduced: 1 }))).toBe("1 detection appeared that the clean frame lacks");
-    expect(reliabilityReason(point({ class_changes: 2, confidence_loss: 0.4 }))).toBe("2 detections changed class");
-    expect(reliabilityReason(point({ confidence_loss: 0.42, dropped: 0 }))).toBe(
+    expect(reliabilityReason(point({ dropped: 2, introduced: 1 }), UNIT_STABILITY)).toBe("2 clean detections lost under the degradation");
+    expect(reliabilityReason(point({ introduced: 1 }), UNIT_STABILITY)).toBe("1 detection appeared that the clean frame lacks");
+    expect(reliabilityReason(point({ class_changes: 2, confidence_loss: 0.4 }), UNIT_STABILITY)).toBe("2 detections changed class");
+    expect(reliabilityReason(point({ dropped: 1, confidence_loss: 0.6 }), { ...UNIT_STABILITY, confidence_loss: 2 })).toBe(
+      "Matched detections lost 0.60 confidence in total",
+    );
+    expect(reliabilityReason(point({ confidence_loss: 0.42, dropped: 0 }), UNIT_STABILITY)).toBe(
       "Matched detections lost 0.42 confidence in total",
     );
   });

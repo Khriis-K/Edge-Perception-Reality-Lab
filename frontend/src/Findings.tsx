@@ -60,6 +60,7 @@ function RunPicker() {
 
 function BenchmarkDocument({ findings }: { findings: BenchmarkFindings }) {
   const { sim_to_real: sim } = findings;
+  const { weights } = findings.record;
   const [pick, setPick] = useState<string | null>(null);
   const synthetic = sim.synthetic.find((s) => s.experiment_id === pick) ?? sim.synthetic[0] ?? null;
   return (
@@ -96,7 +97,7 @@ function BenchmarkDocument({ findings }: { findings: BenchmarkFindings }) {
                 </div>
               )}
               {sim.real ? (
-                <HeadlineNumber name="Real fog · day" side={sim.real} drop={sim.real.map_drop} />
+                <HeadlineNumber name={sim.real.title} side={sim.real} drop={sim.real.map_drop} />
               ) : (
                 <div>
                   <dt>Real fog · day</dt>
@@ -112,9 +113,11 @@ function BenchmarkDocument({ findings }: { findings: BenchmarkFindings }) {
       <Finding number={2} outline={BENCHMARK_OUTLINE[1]} headline={findings.headlines["where-it-fails"]}>
         <ApHeatmap rows={findings.conditions} lowN={findings.record.low_n_objects} />
       </Finding>
-      <Gallery note={`Ranked by error score at confidence ≥ ${findings.display_threshold.toFixed(2)}: misses + false alarms + class confusions, each weighted 1.`}>
+      <Gallery
+        note={`Ranked by error score at confidence ≥ ${findings.display_threshold.toFixed(2)}: misses × ${weights.misses} + false alarms × ${weights.false_alarms} + class confusions × ${weights.class_confusions}.`}
+      >
         {findings.worst_frames.map((frame) => (
-          <BenchmarkCard key={frame.id} frame={frame} />
+          <BenchmarkCard key={frame.id} frame={frame} reason={worstReason(frame, weights)} />
         ))}
       </Gallery>
     </article>
@@ -123,17 +126,25 @@ function BenchmarkDocument({ findings }: { findings: BenchmarkFindings }) {
 
 function VideoDocument({ findings }: { findings: VideoFindings }) {
   const { record } = findings;
+  const { weights } = record;
   return (
     <article aria-label="Findings">
       <Finding number={1} outline={VIDEO_OUTLINE[0]} headline={findings.headlines["reliability-timeline"]}>
         <p className="field-note">
           {record.sample_title}, {record.frames} frames: stability relative to the clean baseline, not accuracy.
         </p>
-        <ReliabilityTimeline timeline={findings.timeline} />
+        <ReliabilityTimeline timeline={findings.timeline} worst={findings.worst_frames[0] ?? null} />
       </Finding>
-      <Gallery note="Ranked by stability score: dropped + introduced + class changes + confidence lost, each weighted 1.">
+      <Gallery
+        note={`Ranked by stability score: dropped × ${weights.dropped} + introduced × ${weights.introduced} + class changes × ${weights.class_changes} + confidence lost × ${weights.confidence_loss}.`}
+      >
         {findings.worst_frames.map((point) => (
-          <VideoCard key={point.index} experimentId={findings.id} point={point} />
+          <VideoCard
+            key={point.index}
+            experimentId={findings.id}
+            point={point}
+            reason={reliabilityReason(point, weights)}
+          />
         ))}
       </Gallery>
     </article>
@@ -277,7 +288,7 @@ function Gallery({ note, children }: { note: string; children: ReactNode[] }) {
   );
 }
 
-function BenchmarkCard({ frame }: { frame: WorstFrame }) {
+function BenchmarkCard({ frame, reason }: { frame: WorstFrame; reason: string }) {
   return (
     <li className="gallery-card">
       <img src={datasetFrameUrl(frame.id)} alt={`Frame ${frame.id}`} loading="lazy" />
@@ -285,7 +296,7 @@ function BenchmarkCard({ frame }: { frame: WorstFrame }) {
       <span className="run-meta">
         {conditionName(frame.condition)} · score {frame.score}
       </span>
-      <span>{worstReason(frame)}</span>
+      <span>{reason}</span>
       <span className="run-meta">
         {scoreParts(frame)} · {frame.hits} {frame.hits === 1 ? "hit" : "hits"}
       </span>
@@ -293,13 +304,13 @@ function BenchmarkCard({ frame }: { frame: WorstFrame }) {
   );
 }
 
-function VideoCard({ experimentId, point }: { experimentId: string; point: FrameReliability }) {
+function VideoCard({ experimentId, point, reason }: { experimentId: string; point: FrameReliability; reason: string }) {
   return (
     <li className="gallery-card">
       <img src={frameImageUrl(experimentId, "degraded", point.index)} alt={`Degraded frame ${point.index}`} loading="lazy" />
       <span className="gallery-title">Frame {point.index}</span>
       <span className="run-meta">score {point.score.toFixed(2)}</span>
-      <span>{reliabilityReason(point)}</span>
+      <span>{reason}</span>
       <span className="run-meta">
         {point.dropped} dropped · {point.introduced} introduced · {point.class_changes} class changes · confidence lost{" "}
         {point.confidence_loss.toFixed(2)} · {point.retained} retained

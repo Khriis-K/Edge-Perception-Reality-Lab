@@ -123,8 +123,8 @@ def fingerprint(path: Path) -> str:
 
 
 @dataclass(frozen=True)
-class CacheEntry[T: Record = SyntheticRecord]:
-    experiment: T
+class CacheEntry:
+    experiment: Record
     saved_at: datetime
 
 
@@ -197,9 +197,12 @@ class ExperimentCache:
     def headlines(self, experiment_id: str) -> dict[str, str]:
         """The headlines the user wrote for a run's findings, by finding. Empty when none are written."""
         try:
-            return json.loads(self._headlines_file(experiment_id).read_text(encoding="utf-8"))
+            stored = json.loads(self._headlines_file(experiment_id).read_text(encoding="utf-8"))
         except (OSError, ValueError):  # none written yet, or the file was damaged by hand
             return {}
+        if not isinstance(stored, dict):  # edited by hand into something else
+            return {}
+        return {key: text for key, text in stored.items() if isinstance(text, str)}
 
     def save_headlines(self, experiment_id: str, headlines: dict[str, str]) -> None:
         """Kept beside the run's record, never in it: the record is what the id was derived from. Written whole and

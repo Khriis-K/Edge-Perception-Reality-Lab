@@ -90,7 +90,7 @@ test("finding 02's heatmap keeps day and night apart and marks low-n cells", asy
     /^Rain · night/,
   ]);
   const clearDay = heatmap.getByRole("row").filter({ has: page.getByRole("rowheader", { name: /^Clear · day/ }) });
-  await expect(clearDay.getByRole("cell").first()).toHaveText("1.00*1 obj");
+  await expect(clearDay.getByRole("cell").first()).toHaveText("1.00*1 obj · 1 fr");
   await expect(heatmap.locator("caption")).toContainText("* fewer than 30 objects (low n)");
   // The worst frames are ranked, each with its reason and its counts.
   const worst = finding(page, "Worst frames").getByRole("listitem");

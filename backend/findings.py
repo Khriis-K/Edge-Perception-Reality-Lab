@@ -47,6 +47,11 @@ REFERENCE = "clear-day"
 REAL_FOG = "fog-day"
 WORST_FRAMES = 6  # in the gallery; every frame is in the Benchmark's Frame table
 
+# Said of every run, then each kind's own limits before them.
+_EVERY_RUN = [
+    "Latency is this machine's, with its execution provider: a comparison between runs, not a real-time claim.",
+    "This is an educational robustness evaluation. It has not been validated for safety-critical or operational use.",
+]
 # "Read this first": what a reviewer must know before trusting a Benchmark run's findings.
 BENCHMARK_LIMITATIONS = [
     "Sim-to-real is distributional, not paired: the real-fog frames are different scenes from the clear frames. Both "
@@ -58,8 +63,7 @@ BENCHMARK_LIMITATIONS = [
     "Ignore regions (the fallback labels Vehicle and Obstacle, DontCare, and group boxes) count as neither hits nor "
     "misses, and the class mapping decides which detections count at all.",
     "Results hold for this subset, model and class mapping only, and say nothing beyond them.",
-    "Latency is this machine's, with its execution provider: a comparison between runs, not a real-time claim.",
-    "This is an educational robustness evaluation. It has not been validated for safety-critical or operational use.",
+    *_EVERY_RUN,
 ]
 
 
@@ -120,8 +124,7 @@ VIDEO_LIMITATIONS = [
     f"Low n counts detections across frames. Consecutive frames of one object are not independent evidence, so on "
     f"video the low-n flag (under {LOW_N_OBJECTS}) under-warns.",
     "One degradation at one severity: other kinds or severities may behave differently.",
-    "Latency is this machine's, with its execution provider: a comparison between runs, not a real-time claim.",
-    "This is an educational robustness evaluation. It has not been validated for safety-critical or operational use.",
+    *_EVERY_RUN,
 ]
 
 
@@ -182,7 +185,7 @@ def benchmark_findings(
         ),
         latency=experiment.latency,
         limitations=BENCHMARK_LIMITATIONS,
-        sim_to_real=sim_to_real(experiment, runs, display_threshold),
+        sim_to_real=sim_to_real(experiment, {row.condition: row for row in scored}, runs, display_threshold),
         conditions=[HeatmapRow(**_side(row).model_dump(), cells=[_cell(c) for c in row.classes]) for row in scored],
         worst_frames=worst_frames(scored),
     )
@@ -275,15 +278,18 @@ def _cell(metrics: ClassMetrics) -> HeatmapCell:
 
 
 def sim_to_real(
-    experiment: BenchmarkExperiment, runs: list[SyntheticFramesExperiment], display_threshold: float
+    experiment: BenchmarkExperiment,
+    scored: dict[str, ConditionResult],
+    runs: list[SyntheticFramesExperiment],
+    display_threshold: float,
 ) -> SimToReal:
-    frames = experiment.frames
-    if not frames.get(REFERENCE):
+    """`scored` is the run's own conditions, already scored at the display threshold."""
+    reference = scored.get(REFERENCE)
+    if reference is None or reference.frames == 0:
         return SimToReal(reference=None, real=None, synthetic=[])
-    reference = condition_result(REFERENCE, frames[REFERENCE], display_threshold)
     real = None
-    if frames.get(REAL_FOG):
-        real = _compare(reference, condition_result(REAL_FOG, frames[REAL_FOG], display_threshold), "Real fog · day", None)
+    if REAL_FOG in scored and scored[REAL_FOG].frames:
+        real = _compare(reference, scored[REAL_FOG], "Real fog · day", None)
     synthetic = [
         _compare(reference, row, row.title, row.experiment_id)
         for row in benchmark_rows(experiment, runs, display_threshold)

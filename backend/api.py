@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.benchmark_run import (
+    BenchmarkExperiment,
     BenchmarkResults,
     FrameDetail,
     ManifestRefused,
@@ -22,7 +23,6 @@ from backend.dataset import DatasetIndex, FrameNotFound, camera_image, check_rea
 from backend.degradations import KINDS, RANDOMIZED, TITLES, DegradationKind, parameters
 from backend.detection import ModelInfo
 from backend.experiment import AppliedDegradation, DegradationSettings, Experiment, FrameVariant
-from backend.benchmark_run import BenchmarkExperiment
 from backend.findings import (
     BENCHMARK_FINDINGS,
     HEADLINE_LENGTH,
@@ -57,7 +57,6 @@ from backend.synthetic_frames import (
 
 router = APIRouter(prefix="/api")
 
-NO_FINDINGS = "No completed Benchmark or video run with that id."
 NO_MODEL_MESSAGE = (
     "The detector's weights are not installed. Fetch them with "
     "`.venv/Scripts/python.exe scripts/fetch_model.py`, then restart the app."
@@ -504,26 +503,19 @@ def get_findings(
     """A finished run's findings, as data for the Findings screen's charts, scored from the stored detections. A
     Benchmark run's has sim-to-real, the condition-by-class heatmap and worst frames at the display threshold; a video
     run's has the reliability timeline and worst frames, and ignores the threshold."""
-    benchmark = jobs.cache.load_benchmark(experiment_id)
-    if benchmark is not None:
-        headlines = jobs.cache.headlines(experiment_id)
-        return benchmark_findings(benchmark, jobs.cache.synthetic_frames_runs(), display_threshold, headlines)
-    video = jobs.experiment(experiment_id)
-    if video is not None:
-        return video_findings(video, _sample_title(video.sample_id), jobs.cache.headlines(experiment_id))
-    raise HTTPException(status_code=404, detail=NO_FINDINGS)
+    run = _findings_run(jobs, experiment_id)
+    headlines = jobs.cache.headlines(experiment_id)
+    if isinstance(run, BenchmarkExperiment):
+        return benchmark_findings(run, jobs.cache.synthetic_frames_runs(), display_threshold, headlines)
+    return video_findings(run, _sample_title(run.sample_id), headlines)
 
 
 @router.put("/findings/{experiment_id}/headlines/{key}")
 def put_headline(experiment_id: str, key: FindingKey, body: HeadlineRequest, jobs: Jobs) -> dict[FindingKey, str]:
     """Store the headline the user wrote for one finding of a run, with the run. Blank text clears it. Returns every
     headline the run now has. A finding the run doesn't have (a timeline on a Benchmark run) is refused (422)."""
-    if jobs.cache.load_benchmark(experiment_id) is not None:
-        keys = BENCHMARK_FINDINGS
-    elif jobs.experiment(experiment_id) is not None:
-        keys = VIDEO_FINDINGS
-    else:
-        raise HTTPException(status_code=404, detail=NO_FINDINGS)
+    run = _findings_run(jobs, experiment_id)
+    keys = BENCHMARK_FINDINGS if isinstance(run, BenchmarkExperiment) else VIDEO_FINDINGS
     if key not in keys:
         raise HTTPException(status_code=422, detail=f"This run has no {key} finding.")
     headlines = {k: v for k, v in jobs.cache.headlines(experiment_id).items() if k in keys}
@@ -534,6 +526,14 @@ def put_headline(experiment_id: str, key: FindingKey, body: HeadlineRequest, job
         headlines.pop(key, None)
     jobs.cache.save_headlines(experiment_id, headlines)
     return headlines
+
+
+def _findings_run(jobs: JobManager, experiment_id: str) -> BenchmarkExperiment | Experiment:
+    """The Benchmark or video run Findings can open under this id, or a 404."""
+    run = jobs.cache.load_benchmark(experiment_id) or jobs.experiment(experiment_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="No completed Benchmark or video run with that id.")
+    return run
 
 
 def _sample_title(sample_id: str) -> str:

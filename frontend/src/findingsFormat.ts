@@ -1,32 +1,46 @@
-import type { FrameReliability, FrameScore, HeatmapCell } from "./api/client";
+import type { BenchmarkFindings, FrameReliability, FrameScore, HeatmapCell, VideoFindings } from "./api/client";
+
+type BenchmarkWeights = BenchmarkFindings["record"]["weights"];
+type StabilityWeights = VideoFindings["record"]["weights"];
 import { formatMetric } from "./benchmarkFormat";
 
 /**
- * Why a Benchmark frame ranks among the worst, in one line: its largest contribution to the error score. Every
- * weight is 1, so that is its largest count; ties go to misses, then false alarms, the order the score lists them.
+ * Why a Benchmark frame ranks among the worst, in one line: its largest weighted contribution to the error score.
+ * Ties go to misses, then false alarms, the order the score lists them.
  */
-export function worstReason(frame: FrameScore): string {
-  const largest = Math.max(frame.misses, frame.false_alarms, frame.class_confusions);
-  if (frame.misses === largest) {
+export function worstReason(frame: FrameScore, weights: BenchmarkWeights): string {
+  const [misses, falseAlarms, confusions] = [
+    frame.misses * weights.misses,
+    frame.false_alarms * weights.false_alarms,
+    frame.class_confusions * weights.class_confusions,
+  ];
+  const largest = Math.max(misses, falseAlarms, confusions);
+  if (misses === largest) {
     const objects = frame.hits + frame.misses + frame.class_confusions;
     return `Missed ${frame.misses} of ${objects} labelled ${plural(objects, "object", "objects")}`;
   }
-  if (frame.false_alarms === largest) {
+  if (falseAlarms === largest) {
     const one = frame.false_alarms === 1;
     return `${frame.false_alarms} ${one ? "detection" : "detections"} where nothing is labelled (${one ? "a false alarm" : "false alarms"})`;
   }
   return `${frame.class_confusions} ${plural(frame.class_confusions, "object", "objects")} found but given the wrong class`;
 }
 
-/** Why a video frame ranks among the least stable: its largest contribution to the stability score. */
-export function reliabilityReason(point: FrameReliability): string {
-  const largest = Math.max(point.dropped, point.introduced, point.class_changes, point.confidence_loss);
+/** Why a video frame ranks among the least stable: its largest weighted contribution to the stability score. */
+export function reliabilityReason(point: FrameReliability, weights: StabilityWeights): string {
+  const [dropped, introduced, classChanges, confidenceLoss] = [
+    point.dropped * weights.dropped,
+    point.introduced * weights.introduced,
+    point.class_changes * weights.class_changes,
+    point.confidence_loss * weights.confidence_loss,
+  ];
+  const largest = Math.max(dropped, introduced, classChanges, confidenceLoss);
   const detections = (count: number) => `${count} ${plural(count, "detection", "detections")}`;
-  if (point.dropped === largest) {
+  if (dropped === largest) {
     return `${point.dropped} clean ${plural(point.dropped, "detection", "detections")} lost under the degradation`;
   }
-  if (point.introduced === largest) return `${detections(point.introduced)} appeared that the clean frame lacks`;
-  if (point.class_changes === largest) return `${detections(point.class_changes)} changed class`;
+  if (introduced === largest) return `${detections(point.introduced)} appeared that the clean frame lacks`;
+  if (classChanges === largest) return `${detections(point.class_changes)} changed class`;
   return `Matched detections lost ${point.confidence_loss.toFixed(2)} confidence in total`;
 }
 
