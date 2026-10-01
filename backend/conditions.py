@@ -68,3 +68,9 @@ def assign_condition(meta: dict) -> str | Excluded:
 
     weather = "fog" if foggy else "snow" if snow else "rain" if rain else "clear"
     return f"{weather}-{'day' if day else 'night'}"
+
+
+def condition_name(condition: str) -> str:
+    """"clear-day" -> "Clear · day", as the interface names a condition."""
+    weather, light = condition.split("-")
+    return f"{weather.capitalize()} · {light}"

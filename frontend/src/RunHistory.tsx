@@ -92,7 +92,7 @@ function RunList(props: {
             className="run-item"
             aria-current={run.id === openId ? "true" : undefined}
             onClick={() => {
-              openExperiment(run.id);
+              openExperiment(run.id, run.input);
               navigate("/synthetic");
             }}
           >

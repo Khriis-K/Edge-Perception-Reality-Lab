@@ -27,6 +27,14 @@ A Benchmark run's id (added 2026-09-30, #11) covers the same things, with the wh
 - the model's name and version, the class-mapping version and the confidence floor, as above;
 - a `"mode": "benchmark"` tag, so it can never equal a Synthetic id.
 
+A Synthetic run on the subset's clear frames (added 2026-09-30, #14) covers what a Benchmark run's id does, plus:
+
+- the clear condition whose frames it degrades (`clear-day` or `clear-night`);
+- the degradation type, severity and seed, as for a Synthetic run on video;
+- a `"mode": "synthetic-frames"` tag in place of `"benchmark"`.
+
+It takes the whole manifest, not just the degraded condition's frame ids. That costs a re-run when only another condition's draw changes, but it is also what places the run beside a Benchmark run: the degraded condition is listed in a Benchmark run's condition tree only when the two share the same manifest, model and scoring settings.
+
 **The dataset's files are not fingerprinted.** Hashing every image and label file in a subset (thousands of files, gigabytes on the real dataset) on each start would cost more than it protects against: SeeingThroughFog is a fixed, versioned download. So if the local labels or images change under the same frame ids, the cache serves the old results. The record stores each frame's ground truth as it was read, so the results always match what was actually scored. Delete `cache/` after changing the dataset.
 
 ## Why

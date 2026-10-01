@@ -192,7 +192,7 @@ export interface paths {
         };
         /**
          * List Experiments
-         * @description Every cached run, newest first, read from the cache folder.
+         * @description Every cached Synthetic run, on video or on dataset frames, newest first, read from the cache folder.
          */
         get: operations["list_experiments_api_experiments_get"];
         put?: never;
@@ -369,6 +369,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/synthetic-frames/experiments/{experiment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Synthetic Frames Results
+         * @description Stability against the clean detections, and per-class AP, precision and recall for both the clean and the
+         *     degraded frames against the ground truth, with the Benchmark's definitions. Scored from the stored detections.
+         */
+        get: operations["get_synthetic_frames_results_api_synthetic_frames_experiments__experiment_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/synthetic-frames/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Synthetic Frames
+         * @description Degrade the manifest's frames of one clear condition and run the detector on both variants, or reuse the
+         *     cached results. The manifest is checked as for a Benchmark run, and must list frames under the condition.
+         */
+        post: operations["start_synthetic_frames_api_synthetic_frames_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -410,6 +452,8 @@ export interface components {
             low_n_objects: number;
             manifest: components["schemas"]["Manifest"];
             model: components["schemas"]["ModelInfo"];
+            /** Synthetic */
+            synthetic: components["schemas"]["SyntheticConditionResult"][];
             /** Warnings */
             warnings: string[];
         };
@@ -610,7 +654,7 @@ export interface components {
         };
         /**
          * ExperimentSummary
-         * @description A cached run, for the run history. The frames themselves come from the experiment.
+         * @description A cached Synthetic run, for the run history. The frames themselves come from the experiment.
          */
         ExperimentSummary: {
             degradation: components["schemas"]["AppliedDegradation"];
@@ -618,6 +662,11 @@ export interface components {
             frame_count: number;
             /** Id */
             id: string;
+            /**
+             * Input
+             * @enum {string}
+             */
+            input: "video" | "dataset";
             model: components["schemas"]["ModelInfo"];
             /** Sample Id */
             sample_id: string;
@@ -688,7 +737,7 @@ export interface components {
              * Mode
              * @enum {string}
              */
-            mode: "synthetic" | "benchmark";
+            mode: "synthetic" | "benchmark" | "synthetic-frames";
             /** Progress */
             progress: number;
             /**
@@ -832,6 +881,16 @@ export interface components {
             /** Sample Id */
             sample_id: string;
         };
+        /** StartSyntheticFramesRequest */
+        StartSyntheticFramesRequest: {
+            /**
+             * Condition
+             * @enum {string}
+             */
+            condition: "clear-day" | "clear-night";
+            degradation: components["schemas"]["DegradationSettings"];
+            manifest: components["schemas"]["Manifest"];
+        };
         /** SubsetResponse */
         SubsetResponse: {
             /** Conditions */
@@ -849,6 +908,57 @@ export interface components {
             max_cap: number;
             /** Problems */
             problems: string[];
+        };
+        /**
+         * SyntheticConditionResult
+         * @description A synthetic degradation of one of the run's clear conditions, on the same frames, beside the real ones.
+         */
+        SyntheticConditionResult: {
+            /** Classes */
+            classes: components["schemas"]["ClassMetrics"][];
+            /** Condition */
+            condition: string;
+            degradation: components["schemas"]["AppliedDegradation"];
+            /** Experiment Id */
+            experiment_id: string;
+            /** Frames */
+            frames: number;
+            /** Low N */
+            low_n: boolean;
+            /** Map */
+            map: number | null;
+            /** Objects */
+            objects: number;
+            /** Title */
+            title: string;
+        };
+        /** SyntheticFramesResults */
+        SyntheticFramesResults: {
+            /** Class Mapping Version */
+            class_mapping_version: number;
+            clean: components["schemas"]["ConditionResult"];
+            /**
+             * Condition
+             * @enum {string}
+             */
+            condition: "clear-day" | "clear-night";
+            /** Confidence Floor */
+            confidence_floor: number;
+            degradation: components["schemas"]["AppliedDegradation"];
+            degraded: components["schemas"]["ConditionResult"];
+            /** Display Threshold */
+            display_threshold: number;
+            /** Id */
+            id: string;
+            /** Iou Threshold */
+            iou_threshold: number;
+            /** Low N Objects */
+            low_n_objects: number;
+            manifest: components["schemas"]["Manifest"];
+            model: components["schemas"]["ModelInfo"];
+            stability: components["schemas"]["StabilityReport"];
+            /** Title */
+            title: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -1430,6 +1540,86 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SampleVideo"][];
+                };
+            };
+        };
+    };
+    get_synthetic_frames_results_api_synthetic_frames_experiments__experiment_id__get: {
+        parameters: {
+            query: {
+                display_threshold: number;
+            };
+            header?: never;
+            path: {
+                experiment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyntheticFramesResults"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_synthetic_frames_api_synthetic_frames_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartSyntheticFramesRequest"];
+            };
+        };
+        responses: {
+            /** @description Cached: the results were reused */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobResponse"];
+                };
+            };
+            /** @description The dataset is not configured or not ready */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

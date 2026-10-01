@@ -4,6 +4,7 @@ A run stores the raw detections (down to the confidence floor) and the ground tr
 condition. Results are scored from that record on request, so a new display threshold never re-runs inference.
 """
 
+from collections.abc import Sequence
 from pathlib import Path
 
 import cv2
@@ -15,6 +16,7 @@ from backend.class_mapping import dataset_class
 from backend.conditions import CONDITIONS, VOCABULARY_VERSION
 from backend.dataset import Frame, camera_image, read_labels
 from backend.detection import Box, ModelInfo
+from backend.experiment import AppliedDegradation
 from backend.labels import Box as LabelBox
 from backend.subset import LOW_N_OBJECTS, Manifest
 
@@ -44,6 +46,14 @@ class ConditionResult(BaseModel):
     classes: list[ClassMetrics]
 
 
+class SyntheticConditionResult(ConditionResult):
+    """A synthetic degradation of one of the run's clear conditions, on the same frames, beside the real ones."""
+
+    experiment_id: str
+    title: str  # e.g. "Synthetic fog 0.60"
+    degradation: AppliedDegradation
+
+
 class BenchmarkResults(BaseModel):
     id: str
     manifest: Manifest
@@ -54,6 +64,8 @@ class BenchmarkResults(BaseModel):
     display_threshold: float
     low_n_objects: int
     conditions: list[ConditionResult]  # every condition in the manifest, in vocabulary order
+    # Cached synthetic runs on this manifest's clear frames, with the same model and scoring settings.
+    synthetic: list[SyntheticConditionResult]
     warnings: list[str]
 
 
@@ -113,21 +125,16 @@ def run_warnings(frames: list[BenchmarkFrame]) -> list[str]:
     ]
 
 
-def benchmark_results(experiment: BenchmarkExperiment, display_threshold: float) -> BenchmarkResults:
-    """Every manifest condition scored at the display threshold, from the stored detections."""
-    conditions = []
-    for condition in (c for c in CONDITIONS if c in experiment.frames):
-        metrics = evaluate_condition(experiment.frames[condition], display_threshold)
-        conditions.append(
-            ConditionResult(
-                condition=condition,
-                frames=metrics.frames,
-                objects=metrics.objects,
-                low_n=metrics.low_n,
-                map=metrics.map,
-                classes=metrics.classes,
-            )
-        )
+def benchmark_results(
+    experiment: BenchmarkExperiment, display_threshold: float, synthetic: Sequence[SyntheticConditionResult] = ()
+) -> BenchmarkResults:
+    """Every manifest condition scored at the display threshold, from the stored detections, then the synthetic
+    rows the caller found for this run."""
+    conditions = [
+        condition_result(condition, experiment.frames[condition], display_threshold)
+        for condition in CONDITIONS
+        if condition in experiment.frames
+    ]
     return BenchmarkResults(
         id=experiment.id,
         manifest=experiment.manifest,
@@ -138,7 +145,20 @@ def benchmark_results(experiment: BenchmarkExperiment, display_threshold: float)
         display_threshold=display_threshold,
         low_n_objects=LOW_N_OBJECTS,
         conditions=conditions,
+        synthetic=list(synthetic),
         warnings=experiment.warnings,
+    )
+
+
+def condition_result(condition: str, frames: list[BenchmarkFrame], display_threshold: float) -> ConditionResult:
+    metrics = evaluate_condition(frames, display_threshold)
+    return ConditionResult(
+        condition=condition,
+        frames=metrics.frames,
+        objects=metrics.objects,
+        low_n=metrics.low_n,
+        map=metrics.map,
+        classes=metrics.classes,
     )
 
 

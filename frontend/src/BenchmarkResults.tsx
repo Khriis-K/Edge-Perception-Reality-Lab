@@ -1,6 +1,11 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { fetchBenchmarkResults, type BenchmarkResults, type ConditionResult } from "./api/client";
-import { useCurrentJob } from "./CurrentJob";
+import {
+  fetchBenchmarkResults,
+  type BenchmarkResults,
+  type ConditionResult,
+  type SyntheticConditionResult,
+} from "./api/client";
+import { completedJobId, useCurrentJob } from "./CurrentJob";
 
 const DEFAULT_THRESHOLD = 0.25; // as in the Synthetic frame viewer
 
@@ -11,13 +16,17 @@ interface BenchmarkResultsState {
   threshold: number;
   setThreshold: (threshold: number) => void;
   /** The condition the tree has selected: the first until the user picks one. */
-  selected: ConditionResult | null;
-  select: (condition: string) => void;
+  selected: ConditionResult | SyntheticConditionResult | null;
+  /** By condition name, or by experiment id for a synthetic row. */
+  select: (key: string) => void;
 }
 
 const BenchmarkResultsContext = createContext<BenchmarkResultsState | null>(null);
 
-/** The latest Benchmark run's results, shared by the condition tree and the work area. */
+/**
+ * The latest Benchmark run's results, shared by the condition tree and the work area. Re-read whenever a run completes,
+ * since a Synthetic run on its clear frames adds a row.
+ */
 export function BenchmarkResultsProvider({ children }: { children: ReactNode }) {
   const { job } = useCurrentJob();
   const benchmark = job?.mode === "benchmark" ? job : null;
@@ -27,7 +36,8 @@ export function BenchmarkResultsProvider({ children }: { children: ReactNode }) 
   const [threshold, setThreshold] = useState(DEFAULT_THRESHOLD);
   const [results, setResults] = useState<BenchmarkResults | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [selectedName, select] = useState<string | null>(null);
+  const [selectedKey, select] = useState<string | null>(null);
+  const finishedJobId = completedJobId(job);
 
   // A new run replaces whatever was open, and its results open once it completes.
   useEffect(() => {
@@ -52,10 +62,14 @@ export function BenchmarkResultsProvider({ children }: { children: ReactNode }) 
         if (!controller.signal.aborted) setError(`Could not load the benchmark results: ${(e as Error).message}`);
       });
     return () => controller.abort();
-  }, [openId, threshold]);
+  }, [openId, threshold, finishedJobId]);
 
   const conditions = results?.conditions ?? [];
-  const selected = conditions.find((c) => c.condition === selectedName) ?? conditions[0] ?? null;
+  const selected =
+    conditions.find((c) => c.condition === selectedKey) ??
+    results?.synthetic.find((row) => row.experiment_id === selectedKey) ??
+    conditions[0] ??
+    null;
 
   return (
     <BenchmarkResultsContext.Provider value={{ results, error, threshold, setThreshold, selected, select }}>

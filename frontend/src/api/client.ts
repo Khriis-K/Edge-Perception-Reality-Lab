@@ -26,6 +26,9 @@ export type Manifest = components["schemas"]["Manifest"];
 export type BenchmarkResults = components["schemas"]["BenchmarkResults"];
 export type ConditionResult = components["schemas"]["ConditionResult"];
 export type ClassMetrics = components["schemas"]["ClassMetrics"];
+export type SyntheticConditionResult = components["schemas"]["SyntheticConditionResult"];
+export type SyntheticFramesResults = components["schemas"]["SyntheticFramesResults"];
+export type ClearCondition = SyntheticFramesResults["condition"];
 
 // Empty in production: the backend serves this page, so the API is same-origin.
 const API_BASE: string = import.meta.env.VITE_API_BASE ?? "";
@@ -142,6 +145,30 @@ export function fetchBenchmarkResults(
 ): Promise<BenchmarkResults> {
   const id = encodeURIComponent(experimentId);
   return request(`/api/benchmark/experiments/${id}?display_threshold=${displayThreshold}`, { signal });
+}
+
+/** Degrades the manifest's frames of one clear condition and runs the detector on both variants, or returns a
+ * completed job with `cached` set. The server checks the manifest as for a Benchmark run. */
+export function startSyntheticFrames(
+  manifest: Manifest,
+  condition: ClearCondition,
+  degradation: DegradationSettings,
+): Promise<Job> {
+  return request("/api/synthetic-frames/jobs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ manifest, condition, degradation }),
+  });
+}
+
+/** Stability against the clean detections, and AP, precision and recall for both variants against the labels. */
+export function fetchSyntheticFramesResults(
+  experimentId: string,
+  displayThreshold: number,
+  signal: AbortSignal,
+): Promise<SyntheticFramesResults> {
+  const id = encodeURIComponent(experimentId);
+  return request(`/api/synthetic-frames/experiments/${id}?display_threshold=${displayThreshold}`, { signal });
 }
 
 export function frameImageUrl(experimentId: string, variant: FrameVariant, frameIndex: number): string {

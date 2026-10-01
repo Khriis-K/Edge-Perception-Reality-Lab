@@ -3,8 +3,10 @@
 Starting a run returns a job at once. For a Synthetic run, a worker thread decodes the video, degrades each frame,
 runs the detector on both the clean and the degraded frame, and writes both to the cache so the
 browser can fetch them by id. Each stage is timed (see backend/latency.py). For a Benchmark run, it runs the detector
-once on every frame of the subset manifest and stores the detections with the frame's ground truth. Only a run that
-finishes every frame becomes an experiment.
+once on every frame of the subset manifest and stores the detections with the frame's ground truth. A Synthetic run on
+dataset frames does both: it degrades each frame of one clear condition of the manifest, runs the detector on the clean
+and the degraded frame, and stores both with the ground truth. Only a run that finishes every frame becomes an
+experiment.
 A cancelled or failed run leaves nothing behind.
 
 A run whose experiment is already cached is not run again: its job is completed from the start.
@@ -29,10 +31,17 @@ from backend.conditions import CONDITIONS
 from backend.degradations import degrade, parameters
 from backend.detection import ModelRunner, TimedDetections
 from backend.experiment import AppliedDegradation, DegradationSettings, Experiment, FrameResult, FrameVariant
-from backend.experiment_cache import ExperimentCache, benchmark_experiment_id, experiment_id, fingerprint
+from backend.experiment_cache import (
+    ExperimentCache,
+    benchmark_experiment_id,
+    experiment_id,
+    fingerprint,
+    synthetic_frames_experiment_id,
+)
 from backend.latency import FrameTiming, summarize
 from backend.samples import Sample
 from backend.subset import Manifest
+from backend.synthetic_frames import ClearCondition, SyntheticFrame, SyntheticFramesExperiment
 from backend.video import VideoError, open_video
 
 # Raw detections are kept down to this confidence, so the display threshold can be changed
@@ -41,7 +50,7 @@ CONFIDENCE_FLOOR = 0.05
 
 JobStatus = Literal["queued", "running", "completed", "cancelled", "failed"]
 ACTIVE: tuple[JobStatus, ...] = ("queued", "running")
-JobMode = Literal["synthetic", "benchmark"]
+JobMode = Literal["synthetic", "benchmark", "synthetic-frames"]
 
 
 class NoDetector(Exception):
@@ -96,6 +105,21 @@ class JobManager:
             confidence_floor=CONFIDENCE_FLOOR,
         )
 
+    def synthetic_frames_id_for(
+        self, manifest: Manifest, condition: ClearCondition, degradation: DegradationSettings
+    ) -> str:
+        """The id a Synthetic run on these dataset frames has, whether or not it has run."""
+        if self.runner is None:
+            raise NoDetector()
+        return synthetic_frames_experiment_id(
+            manifest=manifest,
+            condition=condition,
+            model=self.runner.info,
+            class_mapping_version=CLASS_MAPPING_VERSION,
+            confidence_floor=CONFIDENCE_FLOOR,
+            degradation=degradation,
+        )
+
     def start(self, sample: Sample, degradation: DegradationSettings) -> Job:
         """A Synthetic run: see _start()."""
 
@@ -122,6 +146,23 @@ class JobManager:
             self.benchmark_id_for(manifest),
             cached_frames,
             lambda job: self._run_benchmark(job, dataset_root, manifest),
+        )
+
+    def start_synthetic_frames(
+        self, dataset_root: Path, manifest: Manifest, condition: ClearCondition, degradation: DegradationSettings
+    ) -> Job:
+        """A Synthetic run on the frames the manifest lists under one clear condition, which the caller has checked:
+        see _start()."""
+
+        def cached_frames(experiment_id: str) -> int | None:
+            cached = self.cache.load_synthetic_frames(experiment_id)
+            return None if cached is None else len(cached.frames)
+
+        return self._start(
+            "synthetic-frames",
+            self.synthetic_frames_id_for(manifest, condition, degradation),
+            cached_frames,
+            lambda job: self._run_synthetic_frames(job, dataset_root, manifest, condition, degradation),
         )
 
     def _start(
@@ -272,6 +313,61 @@ class JobManager:
                     confidence_floor=CONFIDENCE_FLOOR,
                     frames=frames,
                     warnings=run_warnings([f for listed in frames.values() for f in listed]),
+                ),
+            )
+            job.status = "completed"  # only after the experiment is stored, so pollers never see a gap
+        except Exception as exc:  # any failure must end the job, never leave it "running"
+            job.error = f"The run stopped at frame {job.frames_done}: {exc}"
+            _discard(job, folder, "failed")
+
+    def _run_synthetic_frames(
+        self,
+        job: Job,
+        dataset_root: Path,
+        manifest: Manifest,
+        condition: ClearCondition,
+        settings: DegradationSettings,
+    ) -> None:
+        # As on video: one generator, drawn in manifest order, so the same seed reproduces every frame.
+        rng = np.random.default_rng(settings.seed)
+        folder = self.cache.staging(job.id)
+        sample_ids = manifest.frames[condition]
+        try:
+            folder.mkdir(parents=True)
+            job.frames_total = len(sample_ids)
+            job.status = "running"
+            frames = []
+            for sample_id in sample_ids:
+                if job.cancel_requested.is_set():
+                    break
+                image, truths = read_frame(dataset_root, sample_id)
+                degraded = degrade(image, settings.kind, settings.severity, rng)
+                frames.append(
+                    SyntheticFrame(
+                        id=sample_id,
+                        clean=self.runner.detect(image, CONFIDENCE_FLOOR),
+                        degraded=self.runner.detect(degraded, CONFIDENCE_FLOOR),
+                        truths=truths,
+                    )
+                )
+                job.frames_done += 1
+
+            if job.cancel_requested.is_set():
+                _discard(job, folder, "cancelled")
+                return
+            self.cache.commit(
+                folder,
+                SyntheticFramesExperiment(
+                    id=job.experiment_id,
+                    manifest=manifest,
+                    condition=condition,
+                    degradation=AppliedDegradation(
+                        **settings.model_dump(), parameters=parameters(settings.kind, settings.severity)
+                    ),
+                    model=self.runner.info,
+                    class_mapping_version=CLASS_MAPPING_VERSION,
+                    confidence_floor=CONFIDENCE_FLOOR,
+                    frames=frames,
                 ),
             )
             job.status = "completed"  # only after the experiment is stored, so pollers never see a gap
