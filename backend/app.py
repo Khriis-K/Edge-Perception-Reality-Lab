@@ -12,12 +12,15 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from backend.api import router
 from backend.detection import ModelRunner
 from backend.experiment_cache import ExperimentCache
+from backend.exports import ExportStore
 from backend.jobs import JobManager
 
 REPO = Path(__file__).resolve().parents[1]
 DEFAULT_STATIC_DIR = REPO / "frontend" / "dist"
 # Finished runs, kept across restarts. Derived frames for local use only; safe to delete.
 DEFAULT_CACHE_DIR = REPO / "cache"
+# Exported reports. Local only, like the cache; safe to delete.
+DEFAULT_EXPORTS_DIR = REPO / "exports"
 
 # Only the local Vite dev server may call the API cross-origin, and only in dev mode.
 VITE_DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
@@ -29,11 +32,13 @@ def create_app(
     runner: ModelRunner | None = None,
     cache_dir: Path = DEFAULT_CACHE_DIR,
     dataset_root: Path | None = None,
+    exports_dir: Path = DEFAULT_EXPORTS_DIR,
 ) -> FastAPI:
     """`runner` is the detector; None means no weights are installed, and runs are refused."""
     # No /docs or /redoc: they load Swagger UI and ReDoc from a CDN. /openapi.json stays.
     app = FastAPI(title="Edge Perception Reliability Lab", version="0.1.0", docs_url=None, redoc_url=None)
     app.state.jobs = JobManager(runner, ExperimentCache(cache_dir))
+    app.state.exports = ExportStore(exports_dir)
     # Fixed for the app's lifetime: the browser never sends a filesystem path.
     app.state.dataset_root = dataset_root.resolve() if dataset_root else None
     # Built on first use: reading every label and metadata file of the real dataset takes minutes.

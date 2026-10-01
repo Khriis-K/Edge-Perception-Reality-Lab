@@ -282,6 +282,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Exports
+         * @description Every saved export, newest first, with its files and their sizes. Read from the exports folder.
+         */
+        get: operations["list_exports_api_exports_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/exports/{export_id}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Export File
+         * @description One file of a saved export, by the export's id and the file's name: never a path.
+         */
+        get: operations["get_export_file_api_exports__export_id___name__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/findings": {
         parameters: {
             query?: never;
@@ -318,6 +358,28 @@ export interface paths {
         get: operations["get_findings_api_findings__experiment_id__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/findings/{experiment_id}/exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export Report
+         * @description Save a finished run's report under exports/: report.html, metrics.json and frames.csv, built from the same
+         *     findings and results these endpoints return at this display threshold. Nothing re-runs. A video run ignores the
+         *     threshold, as its findings do.
+         */
+        post: operations["export_report_api_findings__experiment_id__exports_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -875,6 +937,39 @@ export interface components {
              * Format: date-time
              */
             saved_at: string;
+        };
+        /** ExportSummary */
+        ExportSummary: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Display Threshold */
+            display_threshold: number | null;
+            /** Experiment Id */
+            experiment_id: string;
+            /** Files */
+            files: components["schemas"]["ExportedFile"][];
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "benchmark" | "video";
+            /** Title */
+            title: string;
+        };
+        /** ExportedFile */
+        ExportedFile: {
+            /**
+             * Name
+             * @enum {string}
+             */
+            name: "report.html" | "metrics.json" | "frames.csv";
+            /** Size Bytes */
+            size_bytes: number;
         };
         /**
          * FindingsRun
@@ -1845,6 +1940,60 @@ export interface operations {
             };
         };
     };
+    list_exports_api_exports_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportSummary"][];
+                };
+            };
+        };
+    };
+    get_export_file_api_exports__export_id___name__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                export_id: string;
+                name: "report.html" | "metrics.json" | "frames.csv";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                    "text/csv; charset=utf-8": unknown;
+                    "text/html; charset=utf-8": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_findings_runs_api_findings_get: {
         parameters: {
             query?: never;
@@ -1885,6 +2034,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BenchmarkFindings"] | components["schemas"]["VideoFindings"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_report_api_findings__experiment_id__exports_post: {
+        parameters: {
+            query: {
+                display_threshold: number;
+            };
+            header?: never;
+            path: {
+                experiment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportSummary"];
                 };
             };
             /** @description Validation Error */
