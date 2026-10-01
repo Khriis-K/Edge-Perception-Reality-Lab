@@ -36,7 +36,7 @@ export function TopBar({ section, onOpenInspector }: { section: Section; onOpenI
             Inspector
           </button>
         )}
-        {/* Stub: the Report section holds the real export action. */}
+        {/* Opens the Report screen, which previews the open run's report and holds the export action. */}
         <button type="button" className="primary-action" onClick={() => navigate("/report")}>
           Export report
         </button>

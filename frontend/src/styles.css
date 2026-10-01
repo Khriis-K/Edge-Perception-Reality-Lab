@@ -1300,3 +1300,44 @@ p {
 .record-value {
   font-size: 12px;
 }
+
+/* --- report --------------------------------------------------------------- */
+
+.work-body.report {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+}
+
+/* The report's own light page, as it will print: a white sheet in the dark work area. */
+.report-frame {
+  flex: 1;
+  min-height: 480px;
+  width: 100%;
+  border: 1px solid var(--border);
+  background: #ffffff;
+}
+
+.report-data {
+  flex: 1;
+  min-height: 480px;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+  white-space: pre;
+}
+
+.inspector-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.report-files {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}

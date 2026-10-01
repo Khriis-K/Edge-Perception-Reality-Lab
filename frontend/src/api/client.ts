@@ -52,6 +52,9 @@ export type HeatmapRow = components["schemas"]["HeatmapRow"];
 export type HeatmapCell = components["schemas"]["HeatmapCell"];
 export type WorstFrame = components["schemas"]["WorstFrame"];
 export type FrameReliability = components["schemas"]["FrameReliability"];
+export type ExportSummary = components["schemas"]["ExportSummary"];
+export type ExportedFile = components["schemas"]["ExportedFile"];
+export type ExportFileName = ExportedFile["name"];
 
 // Empty in production: the backend serves this page, so the API is same-origin.
 const API_BASE: string = import.meta.env.VITE_API_BASE ?? "";
@@ -63,6 +66,10 @@ export const apiHost = API_BASE ? new URL(API_BASE).host : window.location.host;
 export class JobNotFound extends Error {}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  return (await fetchOk(path, init)).json();
+}
+
+async function fetchOk(path: string, init?: RequestInit): Promise<Response> {
   const response = await fetch(`${API_BASE}${path}`, init);
   if (response.status === 404 && path.startsWith("/api/jobs/")) throw new JobNotFound("No such job.");
   if (!response.ok) {
@@ -71,7 +78,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const detail = typeof body?.detail === "string" ? body.detail : `HTTP ${response.status}`;
     throw new Error(detail);
   }
-  return response.json();
+  return response;
 }
 
 export function fetchHealth(signal: AbortSignal): Promise<HealthResponse> {
@@ -227,4 +234,33 @@ export function saveHeadline(experimentId: string, key: FindingKey, text: string
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }),
   });
+}
+
+/** Every saved export, newest first, with its files and their sizes. */
+export function fetchExports(signal: AbortSignal): Promise<ExportSummary[]> {
+  return request("/api/exports", { signal });
+}
+
+/** Saves the chosen files of a run's report under exports/, as the preview shows them. */
+export function exportReport(experimentId: string, displayThreshold: number, files: ExportFileName[]): Promise<ExportSummary> {
+  const query = new URLSearchParams({ display_threshold: String(displayThreshold) });
+  for (const name of files) query.append("include", name);
+  return request(`/api/findings/${encodeURIComponent(experimentId)}/exports?${query}`, { method: "POST" });
+}
+
+/** One file of the report an export would write now, as text. Nothing is saved. */
+export async function fetchReportPreview(
+  experimentId: string,
+  name: ExportFileName,
+  displayThreshold: number,
+  signal: AbortSignal,
+): Promise<string> {
+  const id = encodeURIComponent(experimentId);
+  const response = await fetchOk(`/api/findings/${id}/report/${name}?display_threshold=${displayThreshold}`, { signal });
+  return response.text();
+}
+
+/** A saved export's file, served by the export's id and the file's name: never a path. */
+export function exportFileUrl(exportId: string, name: ExportFileName): string {
+  return `${API_BASE}/api/exports/${encodeURIComponent(exportId)}/${name}`;
 }

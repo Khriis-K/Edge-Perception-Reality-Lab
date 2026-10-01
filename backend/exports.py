@@ -1,4 +1,5 @@
-"""Exported reports on local disk: <exports>/<export id>/ holds report.html, metrics.json and frames.csv.
+"""Exported reports on local disk: <exports>/<export id>/ holds the chosen files of report.html, metrics.json and frames.csv;
+export.json stands in for metrics.json's header when that wasn't chosen.
 
 An export is written into a staging folder and renamed into place once every file is written, so a failed export never
 leaves a complete-looking folder. The export id names the time and the run (20261001-154612-<12 hex of the run id>),
@@ -27,6 +28,7 @@ MEDIA_TYPES: dict[ExportFileName, str] = {
     "frames.csv": "text/csv; charset=utf-8",
 }
 HEADER_FILE: ExportFileName = "metrics.json"  # its "export" object says what the export is
+HEADER_ONLY_FILE = "export.json"  # just that object, for an export saved without metrics.json; never served
 
 
 class ExportedFile(BaseModel):
@@ -50,6 +52,8 @@ class ExportStore:
         try:
             for name, text in files.items():
                 (staging / name).write_text(text, encoding="utf-8", newline="")
+            if HEADER_FILE not in files:
+                (staging / HEADER_ONLY_FILE).write_text(header.model_dump_json(indent=2), encoding="utf-8")
             with self._naming:
                 export_id = self._free_id(f"{header.created_at:%Y%m%d-%H%M%S}-{header.experiment_id[:12]}")
                 os.rename(staging, self.root / export_id)
@@ -67,7 +71,7 @@ class ExportStore:
             if not EXPORT_ID.fullmatch(folder.name):
                 continue
             try:
-                header = ExportHeader.model_validate(json.loads((folder / HEADER_FILE).read_bytes())["export"])
+                header = _header(folder)
             except (OSError, ValueError, KeyError, TypeError, ValidationError):
                 continue
             found.append(self._summary(folder.name, header))
@@ -95,3 +99,9 @@ class ExportStore:
             if (folder / name).is_file()
         ]
         return ExportSummary(**header.model_dump(), id=export_id, files=files)
+
+
+def _header(folder: Path) -> ExportHeader:
+    if (folder / HEADER_FILE).is_file():
+        return ExportHeader.model_validate(json.loads((folder / HEADER_FILE).read_bytes())["export"])
+    return ExportHeader.model_validate_json((folder / HEADER_ONLY_FILE).read_bytes())

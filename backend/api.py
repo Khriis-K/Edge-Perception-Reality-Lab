@@ -1,5 +1,6 @@
 """HTTP API routes. Pydantic models here define the OpenAPI schema the frontend types come from."""
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 
@@ -556,48 +557,66 @@ def _sample_title(sample_id: str) -> str:
     return sample.title if sample else sample_id
 
 
+# What renders each export file from a run's report document.
+RENDER_FILE: dict[ExportFileName, Callable[[Report], str]] = {
+    "report.html": report_html,
+    "metrics.json": metrics_json,
+    "frames.csv": frames_csv,
+}
+Threshold = Annotated[float, Query(ge=0, le=1, allow_inf_nan=False)]
+
+
 @router.post("/findings/{experiment_id}/exports", status_code=201)
 def export_report(
     experiment_id: str,
     jobs: Jobs,
     exports: Exports,
-    display_threshold: Annotated[float, Query(ge=0, le=1, allow_inf_nan=False)],
+    display_threshold: Threshold,
+    include: Annotated[list[ExportFileName], Query()] = list(RENDER_FILE),
 ) -> ExportSummary:
-    """Save a finished run's report under exports/: report.html, metrics.json and frames.csv, built from the same
-    findings and results these endpoints return at this display threshold. Nothing re-runs. A video run ignores the
-    threshold, as its findings do."""
+    """Save a finished run's report under exports/: the files included of report.html, metrics.json and frames.csv
+    (all three unless told), built from the same findings and results these endpoints return at this display threshold.
+    Nothing re-runs. A video run ignores the threshold, as its findings do."""
+    report = _report(jobs, experiment_id, display_threshold)
+    return exports.save(report.export, {name: RENDER_FILE[name](report) for name in dict.fromkeys(include)})
+
+
+@router.get(
+    "/findings/{experiment_id}/report/{name}",
+    response_class=Response,
+    responses={200: {"content": {media: {} for media in MEDIA_TYPES.values()}}},
+)
+def preview_report_file(experiment_id: str, name: ExportFileName, jobs: Jobs, display_threshold: Threshold) -> Response:
+    """One file of the report an export would write now, for the Report screen's preview. Nothing is saved."""
+    report = _report(jobs, experiment_id, display_threshold)
+    return Response(RENDER_FILE[name](report), media_type=MEDIA_TYPES[name])
+
+
+def _report(jobs: JobManager, experiment_id: str, display_threshold: float) -> Report:
     run = _findings_run(jobs, experiment_id)
     headlines = jobs.cache.headlines(experiment_id)
     created_at = datetime.now(UTC)
-    report: Report
     if isinstance(run, BenchmarkExperiment):
         runs = jobs.cache.synthetic_frames_runs()
         header = ExportHeader(
             experiment_id=run.id, kind="benchmark", title=_run_title(run), display_threshold=display_threshold,
             created_at=created_at,
         )  # fmt: skip
-        report = BenchmarkReport(
+        return BenchmarkReport(
             export=header,
             findings=benchmark_findings(run, runs, display_threshold, headlines),
             results=benchmark_results(run, display_threshold, benchmark_rows(run, runs, display_threshold)),
         )
-    else:
-        sample = SAMPLES.get(run.sample_id)
-        header = ExportHeader(
-            experiment_id=run.id, kind="video", title=_run_title(run), display_threshold=None, created_at=created_at
-        )
-        report = VideoReport(
-            export=header,
-            input_fingerprint=input_fingerprint(run, sample.path) if sample else None,
-            findings=video_findings(run, _sample_title(run.sample_id), headlines),
-            results=stability_report(run.frames),
-        )
-    files: dict[ExportFileName, str] = {
-        "report.html": report_html(report),
-        "metrics.json": metrics_json(report),
-        "frames.csv": frames_csv(report),
-    }
-    return exports.save(header, files)
+    sample = SAMPLES.get(run.sample_id)
+    header = ExportHeader(
+        experiment_id=run.id, kind="video", title=_run_title(run), display_threshold=None, created_at=created_at
+    )
+    return VideoReport(
+        export=header,
+        input_fingerprint=input_fingerprint(run, sample.path) if sample else None,
+        findings=video_findings(run, _sample_title(run.sample_id), headlines),
+        results=stability_report(run.frames),
+    )
 
 
 @router.get("/exports")
