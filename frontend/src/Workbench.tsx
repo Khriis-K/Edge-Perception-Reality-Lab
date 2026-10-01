@@ -9,6 +9,7 @@ import { DegradationInspector } from "./DegradationSettings";
 import { FindingsDocument, FindingsExplorer } from "./Findings";
 import { FindingsInspector } from "./FindingsInspector";
 import { Rail } from "./Rail";
+import { ReportExplorer, ReportInspector, ReportWorkArea } from "./Report";
 import { SetupExplorer, SyntheticExplorer } from "./RunHistory";
 import { LatencyInspector } from "./Latency";
 import { MatchTable, StabilityInspector } from "./Stability";
@@ -65,6 +66,8 @@ function Explorer({ section }: { section: Section }) {
         <BenchmarkExplorer empty={section.explorerEmpty} />
       ) : section.id === "findings" ? (
         <FindingsExplorer empty={section.explorerEmpty} />
+      ) : section.id === "report" ? (
+        <ReportExplorer empty={section.explorerEmpty} />
       ) : (
         <p className="empty-state">{section.explorerEmpty}</p>
       )}
@@ -77,9 +80,13 @@ function WorkArea({ section, onOpenInspector }: { section: Section; onOpenInspec
     <main className="work-area">
       {/* Keyed by section so each section starts on its own tab set. */}
       {/* animate={false}: Blueprint's sliding indicator forces a transparent tab background. */}
-      <Tabs id="work-tabs" key={section.id} className="tab-strip" animate={false}>
-        <Tab id="overview" title={section.id} panel={<Overview section={section} onOpenInspector={onOpenInspector} />} />
-      </Tabs>
+      {section.id === "report" ? (
+        <ReportWorkArea />
+      ) : (
+        <Tabs id="work-tabs" key={section.id} className="tab-strip" animate={false}>
+          <Tab id="overview" title={section.id} panel={<Overview section={section} onOpenInspector={onOpenInspector} />} />
+        </Tabs>
+      )}
     </main>
   );
 }
@@ -146,6 +153,7 @@ function InspectorContent({ section }: { section: Section }) {
     );
   if (section.id === "benchmark") return <BenchmarkInspector />;
   if (section.id === "findings") return <FindingsInspector />;
+  if (section.id === "report") return <ReportInspector />;
   return <p className="empty-state">Select something to see its details.</p>;
 }
 

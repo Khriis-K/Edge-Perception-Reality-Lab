@@ -375,9 +375,9 @@ export interface paths {
         put?: never;
         /**
          * Export Report
-         * @description Save a finished run's report under exports/: report.html, metrics.json and frames.csv, built from the same
-         *     findings and results these endpoints return at this display threshold. Nothing re-runs. A video run ignores the
-         *     threshold, as its findings do.
+         * @description Save a finished run's report under exports/: the files included of report.html, metrics.json and frames.csv
+         *     (all three unless told), built from the same findings and results these endpoints return at this display threshold.
+         *     Nothing re-runs. A video run ignores the threshold, as its findings do.
          */
         post: operations["export_report_api_findings__experiment_id__exports_post"];
         delete?: never;
@@ -400,6 +400,26 @@ export interface paths {
          *     headline the run now has. A finding the run doesn't have (a timeline on a Benchmark run) is refused (422).
          */
         put: operations["put_headline_api_findings__experiment_id__headlines__key__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/findings/{experiment_id}/report/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Report File
+         * @description One file of the report an export would write now, for the Report screen's preview. Nothing is saved.
+         */
+        get: operations["preview_report_file_api_findings__experiment_id__report__name__get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -2051,6 +2071,7 @@ export interface operations {
         parameters: {
             query: {
                 display_threshold: number;
+                include?: ("report.html" | "metrics.json" | "frames.csv")[];
             };
             header?: never;
             path: {
@@ -2105,6 +2126,42 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_report_file_api_findings__experiment_id__report__name__get: {
+        parameters: {
+            query: {
+                display_threshold: number;
+            };
+            header?: never;
+            path: {
+                experiment_id: string;
+                name: "report.html" | "metrics.json" | "frames.csv";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                    "text/csv; charset=utf-8": unknown;
+                    "text/html; charset=utf-8": unknown;
                 };
             };
             /** @description Validation Error */

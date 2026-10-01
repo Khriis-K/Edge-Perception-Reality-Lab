@@ -23,6 +23,7 @@ frontend/playwright-report/
 frontend/.e2e-dataset/
 frontend/.e2e-dataset-benchmark/
 frontend/.e2e-cache/
+frontend/.e2e-exports/
 
 # Personal dataset download links (registration-gated, may be signed)
 /datasets/

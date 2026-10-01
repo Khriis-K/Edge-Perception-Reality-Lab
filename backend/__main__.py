@@ -7,7 +7,7 @@ from pathlib import Path
 
 import uvicorn
 
-from backend.app import DEFAULT_CACHE_DIR, create_app
+from backend.app import DEFAULT_CACHE_DIR, DEFAULT_EXPORTS_DIR, create_app
 from backend.dataset import DATASET_ENV_VAR
 from backend.detection import ModelRunner
 from backend.stub_runner import StubRunner
@@ -46,6 +46,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_CACHE_DIR,
         help="where finished runs are kept (default: cache/ in the repo; safe to delete)",
     )
+    parser.add_argument(
+        "--exports-dir",
+        type=Path,
+        default=DEFAULT_EXPORTS_DIR,
+        help="where exported reports are saved (default: exports/ in the repo; safe to delete)",
+    )
     return parser
 
 
@@ -66,7 +72,9 @@ def build_runner(kind: str, model_path: Path) -> ModelRunner | None:
 def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
     runner = build_runner(args.runner, MODEL_PATH)
-    app = create_app(dev=args.dev, runner=runner, dataset_root=args.dataset, cache_dir=args.cache_dir)
+    app = create_app(
+        dev=args.dev, runner=runner, dataset_root=args.dataset, cache_dir=args.cache_dir, exports_dir=args.exports_dir
+    )
     uvicorn.run(app, host=HOST, port=args.port)
 
 

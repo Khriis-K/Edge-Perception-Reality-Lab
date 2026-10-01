@@ -11,14 +11,15 @@ export const BENCHMARK_PORT = 8767;
 const BENCHMARK_DATASET = resolve(".e2e-dataset-benchmark");
 // join() gives backslashes on Windows, where the command runs under cmd.exe.
 const python = process.platform === "win32" ? join(".venv", "Scripts", "python.exe") : join(".venv", "bin", "python");
-// Each server gets a cache emptied on every run: finished runs are reused, so a leftover one would turn a test's
-// run into an instant cache hit (and the developer's own cache/ must never leak in).
+// Each server gets a cache and an exports folder emptied on every run: finished runs are reused, so a leftover one
+// would turn a test's run into an instant cache hit, and the developer's own cache/ and exports/ must never leak in.
 const E2E_CACHE = resolve(".e2e-cache");
+const E2E_EXPORTS = resolve(".e2e-exports");
 const freshCache = (name: string) => {
-  const dir = join(E2E_CACHE, name);
+  const [cache, exports] = [join(E2E_CACHE, name), join(E2E_EXPORTS, name)];
   return {
-    clear: `${python} -c "import shutil; shutil.rmtree(r'${dir}', ignore_errors=True)"`,
-    flag: `--cache-dir "${dir}"`,
+    clear: `${python} -c "import shutil; [shutil.rmtree(d, ignore_errors=True) for d in (r'${cache}', r'${exports}')]"`,
+    flag: `--cache-dir "${cache}" --exports-dir "${exports}"`,
   };
 };
 const mainCache = freshCache("main");

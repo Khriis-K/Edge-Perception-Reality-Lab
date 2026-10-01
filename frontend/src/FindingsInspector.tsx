@@ -91,7 +91,8 @@ function VideoRecord({ findings }: { findings: VideoFindings }) {
   );
 }
 
-function Row({ name, children }: { name: string; children: ReactNode }) {
+/** One line of an inspector's record: a name and its value. */
+export function Row({ name, children }: { name: string; children: ReactNode }) {
   return (
     <div>
       <dt>{name}</dt>

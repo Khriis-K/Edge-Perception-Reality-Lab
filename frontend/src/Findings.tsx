@@ -45,7 +45,8 @@ export function FindingsDocument() {
   );
 }
 
-function RunPicker() {
+/** Which finished run is open: shared with the Report screen, which exports the same run. */
+export function RunPicker() {
   const { runs, openId, open } = useFindings();
   return (
     <label className="findings-run">
