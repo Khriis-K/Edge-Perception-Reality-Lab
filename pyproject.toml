@@ -3,20 +3,21 @@ name = "edge-perception-reliability-lab"
 version = "0.1.0"
 description = "Local workbench for evaluating a pretrained detector under real and synthetic adverse conditions."
 requires-python = ">=3.12"
+# Pinned to the versions the project is tested with, so a fresh install reproduces the demo.
 dependencies = [
-    "fastapi>=0.141",
-    "uvicorn[standard]>=0.54",
-    "numpy>=2.5",
-    "opencv-python-headless>=5.0",
+    "fastapi==0.141.1",
+    "uvicorn[standard]==0.54.0",
+    "numpy==2.5.3",
+    "opencv-python-headless==5.0.0.93",
 ]
 
 [project.optional-dependencies]
 # Pick one ONNX Runtime build. Both install the same `onnxruntime` package, so installing one over the other breaks it.
-cpu = ["onnxruntime>=1.30"]
-gpu = ["onnxruntime-gpu[cuda,cudnn]>=1.30"]
+cpu = ["onnxruntime==1.30.0"]
+gpu = ["onnxruntime-gpu[cuda,cudnn]==1.30.0"]
 dev = [
-    "pytest>=9.1",
-    "httpx>=0.28",
+    "pytest==9.1.1",
+    "httpx==0.28.1",
 ]
 
 [tool.setuptools]

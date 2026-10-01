@@ -10,7 +10,7 @@ exports/
 
 # Frontend
 node_modules/
-frontend/dist/
+# frontend/dist/ is committed: reviewers run the built app with Python only (scripts/frontend_bundle.py)
 frontend/test-results/
 frontend/playwright-report/
 

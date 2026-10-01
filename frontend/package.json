@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && node scripts/stamp-bundle.mjs",
     "typecheck": "tsc",
     "gen:api": "node scripts/api-types.mjs",
     "check:api": "node scripts/api-types.mjs --check",
