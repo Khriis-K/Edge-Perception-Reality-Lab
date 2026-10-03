@@ -50,12 +50,14 @@ code { font-family: var(--mono); font-size: 0.9em; color: var(--text); backgroun
 .btn-ghost { border: 1px solid var(--border); color: var(--text); background: var(--raised); }
 .btn svg { width: 16px; height: 16px; fill: currentColor; flex: none; }
 
-.wrap { max-width: 1080px; margin: 0 auto; padding-inline: 16px; }
+.wrap { max-width: 1200px; margin: 0 auto; padding-inline: 16px; }
 
 .label { font-family: var(--mono); font-size: 12px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 
-.hero { padding-block: 56px 40px; display: grid; gap: 20px; }
-.hero h1 { font-size: clamp(2rem, 5.2vw, 3.4rem); line-height: 1.08; font-weight: 700; letter-spacing: -0.015em; max-width: 18ch; }
+.hero { padding-block: 56px 40px; display: grid; gap: 36px; align-items: center; }
+.hero-text { display: grid; gap: 20px; min-width: 0; }
+@media (width >= 1000px) { .hero { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 48px; } }
+.hero h1 { font-size: clamp(2rem, 4.6vw, 3.3rem); line-height: 1.08; font-weight: 700; letter-spacing: -0.015em; max-width: 18ch; }
 .hero h1 .c { color: var(--clean); }
 .hero h1 .d { color: var(--degraded); }
 .lede { font-size: 1.15rem; color: var(--muted); max-width: 64ch; }
@@ -63,6 +65,20 @@ code { font-family: var(--mono); font-size: 0.9em; color: var(--text); backgroun
 .cta { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
 .url { font-family: var(--mono); font-size: 13px; color: var(--muted); overflow-wrap: anywhere; user-select: all; }
 
+.sim { background: var(--panel); border: 1px solid var(--border); min-width: 0; }
+.sim-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 8px 8px 14px; border-bottom: 1px solid var(--border); }
+.sim-head button { font: 500 12px var(--mono); color: var(--text); background: var(--raised); border: 1px solid var(--border); border-radius: 2px; padding: 4px 10px; cursor: pointer; }
+.sim-head button:focus-visible, .sim input:focus-visible { outline: 2px solid var(--clean); outline-offset: 2px; }
+.sim canvas { display: block; width: 100%; max-width: 100%; aspect-ratio: 16 / 10; background: var(--chrome); }
+.sim-insp { padding: 12px 14px; display: grid; gap: 10px; border-top: 1px solid var(--border); }
+.sim-row { display: grid; grid-template-columns: 8ch minmax(0, 1fr) 5ch; gap: 12px; align-items: center; font-size: 14px; }
+.sim-row output { font-family: var(--mono); font-size: 13px; font-variant-numeric: tabular-nums; text-align: right; }
+.sim input[type=range] { width: 100%; accent-color: var(--clean); margin: 0; }
+.params { display: grid; grid-template-columns: auto auto; justify-content: space-between; gap: 2px 16px; font-family: var(--mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+.params span:nth-child(even) { text-align: right; }
+.sim-foot { display: flex; flex-wrap: wrap; gap: 6px 16px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.sim-foot b { color: var(--text); font-weight: 500; }
+.sim-note { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
 .demo { border: 1px solid var(--border); background: var(--chrome); }
 .demo img { display: block; width: 100%; height: auto; max-width: 100%; }
 .demo figcaption { padding: 10px 14px; border-top: 1px solid var(--border); font-size: 13px; color: var(--muted); }
@@ -136,6 +152,7 @@ section > h2 { font-size: 1.6rem; line-height: 1.2; font-weight: 600; max-width:
 
 <main class="wrap">
   <div class="hero">
+   <div class="hero-text">
     <div class="label">Object detection · adverse weather · local workbench</div>
     <h1>Does a detector trained on <span class="c">clear roads</span> still work in <span class="d">fog, snow and night</span>?</h1>
     <p class="lede">A pretrained detector that works on a sunny demo clip says little about the night, fog or snow. This lab runs <strong>YOLOX-Nano</strong> on real adverse-weather driving frames from SeeingThroughFog and scores it against human labels, condition by condition. It also applies controlled synthetic degradations and measures how detections change, then puts the two side by side to ask <strong>whether simulated fog damages the detector the way real fog does</strong>.</p>
@@ -146,6 +163,17 @@ section > h2 { font-size: 1.6rem; line-height: 1.2; font-weight: 600; max-width:
       </a>
       <span class="url">github.com/Khriis-K/Edge-Perception-Reliability-Lab</span>
     </div>
+   </div>
+    <figure class="sim" style="margin:0" aria-labelledby="sim-title">
+      <div class="sim-head"><span class="label" id="sim-title">Synthetic fog · live</span><button type="button" id="sim-play" aria-pressed="true">Pause</button></div>
+      <canvas id="sim-cv" width="640" height="400" role="img" aria-label="A drawn street scene with detection boxes. Synthetic fog thickens and clears as severity changes, and the boxes on distant objects turn into dashed dropped boxes as it thickens."></canvas>
+      <div class="sim-insp">
+        <div class="sim-row"><label for="sim-sev">Severity</label><input type="range" id="sim-sev" min="0" max="1" step="0.01" value="0"><output id="sim-sev-out" for="sim-sev">0.00</output></div>
+        <div class="params"><span>transmission</span><span id="sim-t">1.000</span><span>airlight</span><span>0.800</span></div>
+        <div class="sim-foot"><span><i class="sw" style="background:var(--clean)"></i>retained <b id="sim-kept">4</b></span><span><i class="sw" style="background:var(--degraded)"></i>dropped <b id="sim-drop">0</b></span></div>
+        <figcaption class="sim-note">The fog is the app's own model: I = J·t + A(1 − t), with t = 1 − 0.9 × severity and A = 0.8. The scene and boxes illustrate the stability buckets; they are not detector output. Drag the slider to try it.</figcaption>
+      </div>
+    </figure>
   </div>
 
   <figure class="demo" style="margin:0">
@@ -323,5 +351,118 @@ section > h2 { font-size: 1.6rem; line-height: 1.2; font-weight: 600; max-width:
     <p>Detector: YOLOX-Nano by Megvii, Apache-2.0.</p>
   </footer>
 </main>
+<script>
+(function () {
+  var cv = document.getElementById("sim-cv"), ctx = cv.getContext("2d");
+  var slider = document.getElementById("sim-sev"), sevOut = document.getElementById("sim-sev-out");
+  var tOut = document.getElementById("sim-t"), keptOut = document.getElementById("sim-kept"), dropOut = document.getElementById("sim-drop");
+  var btn = document.getElementById("sim-play");
+  var css = getComputedStyle(document.documentElement);
+  var CLEAN = css.getPropertyValue("--clean").trim(), DEG = css.getPropertyValue("--degraded").trim(), INK = css.getPropertyValue("--chrome").trim();
+  var W = 640, H = 400, HOR = 178, VX = 320;
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var playing = !reduce, sev = reduce ? 0.6 : 0, t0 = performance.now(), last = 0;
+
+  function size() { var d = Math.min(window.devicePixelRatio || 1, 2); cv.width = W * d; cv.height = H * d; ctx.setTransform(d, 0, 0, d, 0, 0); }
+  function poly(pts, fill) { ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); }
+  function lerp(a, b, u) { return a + (b - a) * u; }
+
+  function facades(side) {
+    var cols = ["#7a7468", "#938b7b", "#6a6862", "#a2967f", "#7d7a73"], xs = [0, 0.3, 0.52, 0.7, 0.84, 1];
+    for (var i = 0; i < 5; i++) {
+      var a = xs[i], b = xs[i + 1], top0 = 20 + i * 6;
+      var f = function (u) { return side < 0 ? lerp(0, 285, u) : lerp(640, 355, u); };
+      var top = function (u) { return lerp(top0, 160, u); }, bot = function (u) { return lerp(322, HOR, u); };
+      poly([[f(a), top(a)], [f(b), top(b)], [f(b), bot(b)], [f(a), bot(a)]], cols[i]);
+      ctx.fillStyle = "rgba(30,34,40,0.35)";
+      for (var r = 0.2; r < 0.85; r += 0.22) for (var c = a + 0.04; c < b - 0.03; c += 0.07) {
+        var x = f(c), y = lerp(top(c), bot(c), r), s = lerp(14, 2, c);
+        ctx.fillRect(x - s * 0.3, y, s * 0.6, s * 0.8);
+      }
+    }
+  }
+  function car(cx, y, w, body) {
+    var h = w * 0.62;
+    ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(cx - w * 0.52, y - h * 0.06, w * 1.04, h * 0.1);
+    ctx.fillStyle = body; ctx.fillRect(cx - w / 2, y - h * 0.62, w, h * 0.56);
+    ctx.fillRect(cx - w * 0.36, y - h, w * 0.72, h * 0.42);
+    ctx.fillStyle = "#26303a"; ctx.fillRect(cx - w * 0.3, y - h * 0.92, w * 0.6, h * 0.28);
+    ctx.fillStyle = "#d63b3b"; ctx.fillRect(cx - w * 0.46, y - h * 0.5, w * 0.14, h * 0.1); ctx.fillRect(cx + w * 0.32, y - h * 0.5, w * 0.14, h * 0.1);
+    ctx.fillStyle = "#1c1f24"; ctx.fillRect(cx - w * 0.46, y - h * 0.08, w * 0.16, h * 0.1); ctx.fillRect(cx + w * 0.3, y - h * 0.08, w * 0.16, h * 0.1);
+    return [cx - w * 0.54, y - h * 1.04, w * 1.08, h * 1.06];
+  }
+  function person(x, y, hgt) {
+    ctx.fillStyle = "#2d3138"; ctx.fillRect(x - hgt * 0.11, y - hgt * 0.78, hgt * 0.22, hgt * 0.42);
+    ctx.fillRect(x - hgt * 0.1, y - hgt * 0.38, hgt * 0.08, hgt * 0.38); ctx.fillRect(x + hgt * 0.02, y - hgt * 0.38, hgt * 0.08, hgt * 0.38);
+    ctx.fillStyle = "#c79a7c"; ctx.beginPath(); ctx.arc(x, y - hgt * 0.88, hgt * 0.1, 0, 7); ctx.fill();
+    return [x - hgt * 0.2, y - hgt * 1.02, hgt * 0.4, hgt * 1.06];
+  }
+
+  // Each object's box drops once severity passes its threshold, far and small objects first. Illustrative only.
+  function scene(time) {
+    var g = ctx.createLinearGradient(0, 0, 0, HOR); g.addColorStop(0, "#8fa9c2"); g.addColorStop(1, "#d3dce4");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, HOR + 2);
+    facades(-1); facades(1);
+    poly([[0, 322], [285, HOR], [305, HOR], [-140, H], [0, H]], "#8e9090");
+    poly([[640, 322], [355, HOR], [335, HOR], [780, H], [640, H]], "#8e9090");
+    var r = ctx.createLinearGradient(0, HOR, 0, H); r.addColorStop(0, "#5d6268"); r.addColorStop(1, "#3f4449");
+    poly([[305, HOR], [335, HOR], [780, H], [-140, H]], r);
+    for (var k = 0; k < 9; k++) {
+      var u1 = ((k + time * 0.9) % 9) / 9, u2 = Math.min(u1 + 0.05, 1), p1 = u1 * u1, p2 = u2 * u2;
+      var y1 = HOR + (H - HOR) * p1, y2 = HOR + (H - HOR) * p2, w1 = 0.6 + 6 * p1, w2 = 0.6 + 6 * p2;
+      poly([[VX - w1, y1], [VX + w1, y1], [VX + w2, y2], [VX - w2, y2]], "#e4e2d8");
+    }
+    var sway = Math.sin(time * 0.7);
+    return [
+      { box: car(318 + sway, 206, 26, "#8a3030"), cls: "car", drop: 0.35 },
+      { box: person(522, 282, 56), cls: "person", drop: 0.5 },
+      { box: car(258 - sway * 2, 252, 64, "#b9b5ad"), cls: "car", drop: 0.7 },
+      { box: car(408 + sway * 4, 352, 156, "#35577f"), cls: "car", drop: 2 }
+    ];
+  }
+  function tag(x, y, text, color, ink) {
+    ctx.font = "500 11px 'IBM Plex Mono', ui-monospace, monospace";
+    var w = ctx.measureText(text).width + 8;
+    ctx.fillStyle = color; ctx.fillRect(x - 1, y - 15, w, 15);
+    ctx.fillStyle = ink; ctx.fillText(text, x + 3, y - 4);
+  }
+
+  function render(time) {
+    var t = 1 - 0.9 * sev, objs = scene(time), kept = 0, drop = 0;
+    ctx.fillStyle = "rgba(204,204,204," + (1 - t) + ")"; ctx.fillRect(0, 0, W, H); // I = J*t + 255*0.8*(1 - t)
+    objs.forEach(function (o) {
+      var b = o.box, gone = sev >= o.drop;
+      ctx.lineWidth = 2; ctx.setLineDash(gone ? [6, 4] : []);
+      ctx.strokeStyle = gone ? DEG : CLEAN; ctx.strokeRect(b[0], b[1], b[2], b[3]); ctx.setLineDash([]);
+      tag(b[0], b[1], gone ? "dropped" : o.cls, gone ? DEG : CLEAN, gone ? "#ffffff" : INK);
+      if (gone) drop++; else kept++;
+    });
+    sevOut.textContent = sev.toFixed(2); tOut.textContent = t.toFixed(3);
+    keptOut.textContent = kept; dropOut.textContent = drop;
+  }
+  function ease(u) { return u * u * (3 - 2 * u); }
+  function cycle(ms) {
+    var x = (ms % 10000) / 1000;
+    if (x < 1.5) return 0;
+    if (x < 5) return 0.8 * ease((x - 1.5) / 3.5);
+    if (x < 7) return 0.8;
+    return 0.8 * (1 - ease((x - 7) / 3));
+  }
+  function frame(now) {
+    if (!playing) return;
+    sev = cycle(now - t0); slider.value = sev; last = (now - t0) / 1000; render(last);
+    requestAnimationFrame(frame);
+  }
+  function setPlaying(on) {
+    playing = on; btn.textContent = on ? "Pause" : "Play"; btn.setAttribute("aria-pressed", on ? "true" : "false");
+    if (on) { t0 = performance.now(); requestAnimationFrame(frame); }
+  }
+  slider.addEventListener("input", function () { if (playing) setPlaying(false); sev = +slider.value; render(last); });
+  btn.addEventListener("click", function () { setPlaying(!playing); });
+  size(); slider.value = sev; render(0);
+  if (document.fonts) document.fonts.ready.then(function () { if (!playing) render(last); });
+  if (playing) requestAnimationFrame(frame); else setPlaying(false);
+})();
+</script>
 </body>
 </html>
